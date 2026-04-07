@@ -1,0 +1,12 @@
+gst_video_bridge:
+  ros__parameters:
+    input_topic: /camera_driver_uv/vis/image_raw
+    input_transport: raw
+    max_fps: 30.0
+    use_wall_clock_timestamps: false
+    pipeline: >-
+      appsrc is-live=true format=time do-timestamp=true !
+      videoconvert !
+      x264enc tune=zerolatency bitrate=2000 speed-preset=ultrafast !
+      mpegtsmux !
+      srtsink uri=srt://127.0.0.1:9000?mode=caller

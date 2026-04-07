@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ros2_gst_video_bridge</name>
+  <version>0.1.0</version>
+  <description>Generic ROS 2 video bridge backed by configurable GStreamer pipelines.</description>
+
+  <maintainer email="mouhsine98@gmail.com">Mouhsine Kassimi Farhaoui</maintainer>
+  <license>AGPL-3.0-only</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
