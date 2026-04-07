@@ -1,0 +1,22 @@
+// Author: Mouhsine Kassimi Farhaoui
+// Contact: mouhsine98@gmail.com
+
+#ifndef ROS2_GST_VIDEO_BRIDGE__RUNTIME__CAPABILITY_PROBE_HPP_
+#define ROS2_GST_VIDEO_BRIDGE__RUNTIME__CAPABILITY_PROBE_HPP_
+
+#include <vector>
+#include <string>
+
+namespace ros2_gst_video_bridge
+{
+
+class CapabilityProbe
+{
+public:
+  std::vector<std::string> detectTransports() const;
+  std::vector<std::string> detectCodecs() const;
+};
+
+}  // namespace ros2_gst_video_bridge
+
+#endif  // ROS2_GST_VIDEO_BRIDGE__RUNTIME__CAPABILITY_PROBE_HPP_

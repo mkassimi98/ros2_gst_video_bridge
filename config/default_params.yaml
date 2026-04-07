@@ -1,7 +1,15 @@
 gst_video_bridge:
   ros__parameters:
     input_topic: /camera_driver_uv/vis/image_raw
-    input_transport: raw
+
+    gst.transport: srt
+    gst.codec: h264
+    gst.profile: low_latency
+    gst.sink_uri: srt://127.0.0.1:9000?mode=caller
+    gst.bitrate_kbps: 2000
+    gst.latency_ms: 60
+    gst.pipeline_override: ""
+
     max_fps: 30.0
     use_wall_clock_timestamps: false
     pipeline: >-

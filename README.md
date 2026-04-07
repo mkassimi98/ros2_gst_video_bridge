@@ -1,11 +1,25 @@
 # ros2_gst_video_bridge
-Generic ROS 2 video bridge that subscribes to Image or CompressedImage topics and forwards them through configurable GStreamer pipelines (SRT, RTSP, RTP/UDP, files, and other sinks).
+Generic ROS 2 video bridge that subscribes to a raw `sensor_msgs/Image` topic and forwards frames through configurable GStreamer pipelines (SRT, RTSP, RTP/UDP, files, and other sinks).
 
 ## Goals
 
 - Keep transport generic by delegating output to configurable GStreamer pipelines.
-- Support both `sensor_msgs/Image` and `sensor_msgs/CompressedImage` inputs.
+- Keep ROS-side ingestion simple: raw image input, topic name configurable.
 - Be production-friendly for Jetson/edge deployment and GCS streaming.
+
+## Configuration Contract
+
+- ROS side (minimal and stable):
+	- `input_topic`
+
+- GStreamer side (fully parametrizable):
+	- `gst.transport`
+	- `gst.codec`
+	- `gst.profile`
+	- `gst.sink_uri`
+	- `gst.bitrate_kbps`
+	- `gst.latency_ms`
+	- `gst.pipeline_override`
 
 ## Repository Structure
 

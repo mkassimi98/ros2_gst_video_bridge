@@ -4,8 +4,16 @@
 #ifndef ROS2_GST_VIDEO_BRIDGE__GST_VIDEO_BRIDGE_NODE_HPP_
 #define ROS2_GST_VIDEO_BRIDGE__GST_VIDEO_BRIDGE_NODE_HPP_
 
+#include "ros2_gst_video_bridge/core/gst_bridge_config.hpp"
+
+#include "ros2_gst_video_bridge/runtime/capability_probe.hpp"
+#include "ros2_gst_video_bridge/runtime/metrics_publisher.hpp"
+#include "ros2_gst_video_bridge/runtime/stream_engine.hpp"
+#include "ros2_gst_video_bridge/runtime/topic_introspector.hpp"
+
 #include <rclcpp/rclcpp.hpp>
 
+#include <memory>
 #include <string>
 
 namespace ros2_gst_video_bridge
@@ -17,13 +25,17 @@ public:
   explicit GstVideoBridgeNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 private:
+  void initializeModules();
   void logConfiguration() const;
+  void logRuntimeCapabilities() const;
 
-  std::string input_topic_;
-  std::string input_transport_;
-  std::string pipeline_;
-  double max_fps_;
-  bool use_wall_clock_timestamps_;
+  GstBridgeConfig config_;
+  std::string effective_pipeline_;
+
+  std::unique_ptr<TopicIntrospector> topic_introspector_;
+  std::unique_ptr<CapabilityProbe> capability_probe_;
+  std::unique_ptr<StreamEngine> stream_engine_;
+  std::unique_ptr<MetricsPublisher> metrics_publisher_;
 };
 
 }  // namespace ros2_gst_video_bridge

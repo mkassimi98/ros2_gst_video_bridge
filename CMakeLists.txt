@@ -14,6 +14,12 @@ find_package(rclcpp REQUIRED)
 add_executable(gst_video_bridge_node
   src/main.cc
   src/gst_video_bridge_node.cc
+  src/core/config_loader.cc
+  src/core/pipeline_builder.cc
+  src/runtime/capability_probe.cc
+  src/runtime/topic_introspector.cc
+  src/runtime/stream_engine.cc
+  src/runtime/metrics_publisher.cc
 )
 
 target_include_directories(gst_video_bridge_node
