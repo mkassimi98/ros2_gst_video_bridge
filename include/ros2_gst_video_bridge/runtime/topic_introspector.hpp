@@ -19,6 +19,7 @@ public:
   explicit TopicIntrospector(rclcpp::Node & node);
 
   std::map<std::string, std::vector<std::string>> listTopics() const;
+  std::map<std::string, std::vector<std::string>> listImageTopics() const;
 
 private:
   rclcpp::Node & node_;

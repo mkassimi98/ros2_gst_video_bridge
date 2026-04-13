@@ -9,21 +9,60 @@
 namespace ros2_gst_video_bridge
 {
 
-struct GstBridgeConfig
+struct ProfileConfig
+{
+  std::string machine{ "generic" };
+  std::string stream{ "default" };
+};
+
+struct SourceConfig
 {
   std::string input_topic{ "/camera/image_raw" };
+};
 
-  std::string gst_transport{ "srt" };
-  std::string gst_codec{ "h264" };
-  std::string gst_profile{ "low_latency" };
-  std::string gst_sink_uri{ "srt://127.0.0.1:9000?mode=caller" };
-  std::string gst_pipeline_override{};
+struct TransportConfig
+{
+  std::string kind{ "srt" };
+  std::string sink_uri{ "srt://127.0.0.1:9000?mode=caller" };
+  int latency_ms{ 60 };
 
-  int gst_bitrate_kbps{ 2000 };
-  int gst_latency_ms{ 60 };
+  bool reconnect_enabled{ true };
+  int reconnect_interval_ms{ 1000 };
+  int reconnect_max_attempts{ 0 };  // 0 means unlimited
+};
 
+struct CodecConfig
+{
+  std::string name{ "h264" };
+  std::string profile{ "baseline" };
+  std::string tune{ "zerolatency" };
+  std::string rate_control{ "cbr" };
+
+  int bitrate_kbps{ 2000 };
+  int gop{ 30 };
+};
+
+struct RuntimeConfig
+{
   double max_fps{ 30.0 };
   bool use_wall_clock_timestamps{ false };
+  std::string mode{ "stream" };
+  bool print_effective_config{ true };
+};
+
+struct GstConfig
+{
+  std::string pipeline_override{};
+};
+
+struct GstBridgeConfig
+{
+  ProfileConfig profile;
+  SourceConfig source;
+  TransportConfig transport;
+  CodecConfig codec;
+  RuntimeConfig runtime;
+  GstConfig gst;
 };
 
 }  // namespace ros2_gst_video_bridge

@@ -24,13 +24,22 @@ class GstVideoBridgeNode : public rclcpp::Node
 public:
   explicit GstVideoBridgeNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
+  bool hasImmediateExit() const;
+  int immediateExitCode() const;
+
 private:
+  bool handleRuntimeMode();
+  void printImageTopics() const;
+  void printGstCapabilities() const;
+  bool validateConfiguration() const;
+
   void initializeModules();
   void logConfiguration() const;
   void logRuntimeCapabilities() const;
 
   GstBridgeConfig config_;
   std::string effective_pipeline_;
+  int immediate_exit_code_{-1};
 
   std::unique_ptr<TopicIntrospector> topic_introspector_;
   std::unique_ptr<CapabilityProbe> capability_probe_;

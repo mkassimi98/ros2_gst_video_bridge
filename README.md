@@ -7,19 +7,39 @@ Generic ROS 2 video bridge that subscribes to a raw `sensor_msgs/Image` topic an
 - Keep ROS-side ingestion simple: raw image input, topic name configurable.
 - Be production-friendly for Jetson/edge deployment and GCS streaming.
 
-## Configuration Contract
+## Configuration Contract (Phase 2)
+
+- Profiles (layered defaults):
+	- `profile.machine` (`generic`, `jetson`, `x86`, `raspi`)
+	- `profile.stream` (`default`, `low_latency`, `low_bandwidth`, `high_quality`, `monitoring_udp`)
 
 - ROS side (minimal and stable):
 	- `input_topic`
 
-- GStreamer side (fully parametrizable):
-	- `gst.transport`
-	- `gst.codec`
-	- `gst.profile`
-	- `gst.sink_uri`
-	- `gst.bitrate_kbps`
-	- `gst.latency_ms`
-	- `gst.pipeline_override`
+- Transport parameters:
+	- `transport.kind` (`srt`, `rtsp`, `udp`, `file`)
+	- `transport.sink_uri`
+	- `transport.latency_ms`
+	- `transport.reconnect.enabled`
+	- `transport.reconnect.interval_ms`
+	- `transport.reconnect.max_attempts`
+
+- Codec parameters:
+	- `codec.name` (`h264`, `h265`, `mjpeg`)
+	- `codec.profile`
+	- `codec.tune`
+	- `codec.rate_control`
+	- `codec.bitrate_kbps`
+	- `codec.gop`
+
+- Runtime parameters:
+	- `max_fps`
+	- `use_wall_clock_timestamps`
+	- `runtime.mode` (`stream`, `list_topics`, `list_capabilities`, `validate_config`, `discover`)
+	- `runtime.print_effective_config`
+
+- Escape hatch:
+	- `gst.pipeline_override` (when set, bypasses preset generation)
 
 ## Repository Structure
 
@@ -48,6 +68,32 @@ source install/setup.bash
 
 ```bash
 ros2 launch ros2_gst_video_bridge gst_video_bridge.launch.py
+```
+
+### Discoverability modes (Phase 3)
+
+- List ROS image topics visible on the host:
+
+```bash
+ros2 run ros2_gst_video_bridge gst_video_bridge_node --ros-args -p runtime.mode:=list_topics
+```
+
+- List detected GStreamer plugins, encoders, and sinks:
+
+```bash
+ros2 run ros2_gst_video_bridge gst_video_bridge_node --ros-args -p runtime.mode:=list_capabilities
+```
+
+- Validate effective configuration and exit:
+
+```bash
+ros2 run ros2_gst_video_bridge gst_video_bridge_node --ros-args -p runtime.mode:=validate_config
+```
+
+- Run full discoverability report (topics + capabilities) and exit:
+
+```bash
+ros2 run ros2_gst_video_bridge gst_video_bridge_node --ros-args -p runtime.mode:=discover
 ```
 
 ## Current Status
