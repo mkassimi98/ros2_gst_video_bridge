@@ -10,21 +10,19 @@
 #include <string>
 #include <vector>
 
-namespace ros2_gst_video_bridge
-{
+namespace ros2_gst_video_bridge {
 
-class TopicIntrospector
-{
+class TopicIntrospector {
 public:
-  explicit TopicIntrospector(rclcpp::Node & node);
+  explicit TopicIntrospector(rclcpp::Node& node);
 
   std::map<std::string, std::vector<std::string>> listTopics() const;
   std::map<std::string, std::vector<std::string>> listImageTopics() const;
 
 private:
-  rclcpp::Node & node_;
+  rclcpp::Node& node_;
 };
 
-}  // namespace ros2_gst_video_bridge
+} // namespace ros2_gst_video_bridge
 
-#endif  // ROS2_GST_VIDEO_BRIDGE__RUNTIME__TOPIC_INTROSPECTOR_HPP_
+#endif // ROS2_GST_VIDEO_BRIDGE__RUNTIME__TOPIC_INTROSPECTOR_HPP_

@@ -6,57 +6,50 @@
 
 #include <string>
 
-namespace ros2_gst_video_bridge
-{
+namespace ros2_gst_video_bridge {
 
-struct ProfileConfig
-{
-  std::string machine{ "generic" };
-  std::string stream{ "default" };
+struct ProfileConfig {
+  std::string machine{"generic"};
+  std::string stream{"default"};
 };
 
-struct SourceConfig
-{
-  std::string input_topic{ "/camera/image_raw" };
+struct SourceConfig {
+  std::string input_topic{"/camera/image_raw"};
 };
 
-struct TransportConfig
-{
-  std::string kind{ "srt" };
-  std::string sink_uri{ "srt://127.0.0.1:9000?mode=listener" };
-  int latency_ms{ 60 };
+struct TransportConfig {
+  std::string kind{"srt"};
+  std::string sink_uri{"srt://127.0.0.1:9000?mode=listener"};
+  int latency_ms{60};
 
-  bool reconnect_enabled{ true };
-  int reconnect_interval_ms{ 1000 };
-  int reconnect_max_attempts{ 0 };  // 0 means unlimited
+  bool reconnect_enabled{true};
+  int reconnect_interval_ms{1000};
+  int reconnect_max_attempts{0}; // 0 means unlimited
 };
 
-struct CodecConfig
-{
-  std::string name{ "h264" };
-  std::string profile{ "baseline" };
-  std::string tune{ "zerolatency" };
-  std::string rate_control{ "cbr" };
+struct CodecConfig {
+  std::string name{"h264"};
+  std::string encoder{""};
+  std::string profile{"baseline"};
+  std::string tune{"zerolatency"};
+  std::string rate_control{"cbr"};
 
-  int bitrate_kbps{ 2000 };
-  int gop{ 30 };
+  int bitrate_kbps{2000};
+  int gop{30};
 };
 
-struct RuntimeConfig
-{
-  double max_fps{ 30.0 };
-  bool use_wall_clock_timestamps{ false };
-  std::string mode{ "stream" };
-  bool print_effective_config{ true };
+struct RuntimeConfig {
+  double max_fps{30.0};
+  bool use_wall_clock_timestamps{false};
+  std::string mode{"stream"};
+  bool print_effective_config{true};
 };
 
-struct GstConfig
-{
+struct GstConfig {
   std::string pipeline_override{};
 };
 
-struct GstBridgeConfig
-{
+struct GstBridgeConfig {
   ProfileConfig profile;
   SourceConfig source;
   TransportConfig transport;
@@ -65,6 +58,6 @@ struct GstBridgeConfig
   GstConfig gst;
 };
 
-}  // namespace ros2_gst_video_bridge
+} // namespace ros2_gst_video_bridge
 
-#endif  // ROS2_GST_VIDEO_BRIDGE__CORE__GST_BRIDGE_CONFIG_HPP_
+#endif // ROS2_GST_VIDEO_BRIDGE__CORE__GST_BRIDGE_CONFIG_HPP_

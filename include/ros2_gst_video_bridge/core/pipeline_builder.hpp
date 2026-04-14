@@ -8,15 +8,13 @@
 
 #include <string>
 
-namespace ros2_gst_video_bridge
-{
+namespace ros2_gst_video_bridge {
 
-class PipelineBuilder
-{
+class PipelineBuilder {
 public:
-  static std::string build(const GstBridgeConfig & config);
+  static std::string build(const GstBridgeConfig& config);
 };
 
-}  // namespace ros2_gst_video_bridge
+} // namespace ros2_gst_video_bridge
 
-#endif  // ROS2_GST_VIDEO_BRIDGE__CORE__PIPELINE_BUILDER_HPP_
+#endif // ROS2_GST_VIDEO_BRIDGE__CORE__PIPELINE_BUILDER_HPP_

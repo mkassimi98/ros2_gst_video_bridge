@@ -25,7 +25,7 @@ Generic ROS 2 video bridge that subscribes to a raw `sensor_msgs/Image` topic an
 	- `transport.reconnect.max_attempts`
 
 - Codec parameters:
-	- `codec.name` (`h264`, `h265`, `mjpeg`)
+	- `codec.name` (`auto`, `h264`, `h265`, `mjpeg`)
 	- `codec.profile`
 	- `codec.tune`
 	- `codec.rate_control`
@@ -119,6 +119,16 @@ ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
 	"sink_uri:=srt://0.0.0.0:9000?mode=listener"
 ```
 
+For Bayer cameras, enable optional debayer (color output before bridge):
+
+```bash
+ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
+	input_topic:=/camera_driver_uv_example/vis/image_raw \
+	enable_debayer:=true \
+	debayer_output_topic:=/camera_driver_uv_example/vis/image_color \
+	"sink_uri:=srt://0.0.0.0:9000?mode=listener"
+```
+
 ### 4) Launch SRT receiver as caller (Terminal C)
 
 ```bash
@@ -180,13 +190,101 @@ Under `config/profiles/`:
 
 ### Runtime metrics
 
-The node publishes runtime metrics on `~/runtime_metrics` (`std_msgs/msg/String`), including:
+The node publishes runtime metrics on `~/runtime_metrics` (`std_msgs/msg/String`) for backward compatibility, and typed control-plane topics via `ros2_gst_video_bridge_msgs`:
+
+- `~/runtime_status` (`ros2_gst_video_bridge_msgs/msg/RuntimeStatus`)
+- `~/runtime_events` (`ros2_gst_video_bridge_msgs/msg/RuntimeEvent`)
+- `~/set_streaming_profile` (`ros2_gst_video_bridge_msgs/srv/SetStreamingProfile`)
+
+Fields include:
 
 - state (`connecting|streaming|degraded|reconnecting|failed`)
 - `fps_in`, `fps_out`
 - dropped frame counters
 - reconnect counter
 - latency estimate in milliseconds
+- selected codec/encoder and fallback flags
+- adaptation profile and current adaptation level
+
+Operator runtime command example:
+
+```bash
+ros2 service call /gst_video_bridge/set_streaming_profile ros2_gst_video_bridge_msgs/srv/SetStreamingProfile "{adaptation_profile: balanced, reset_counters: false}"
+```
+
+First-failure snapshot:
+
+- On the first streaming failure in a session, the bridge publishes `FIRST_FAILURE_SNAPSHOT` on `~/runtime_events`.
+- Payload includes session/stream IDs, runtime state, selected codec/encoder, sink URI, fallback status, and effective pipeline string.
+
+### Automatic codec selection (`codec.name:=auto`)
+
+When `codec.name` is set to `auto`, the node inspects available encoder implementations via
+`gst-inspect-1.0` and resolves to the best codec for the selected machine profile.
+
+Selection order by machine profile:
+
+| Machine profile | Preferred implementation classes |
+|---|---|
+| `jetson` | `hw:nvidia-v4l2` -> `hw:nvidia` -> other HW (`v4l2`/`omx`/`vaapi`) -> `sw` |
+| `x86` | `hw:vaapi` -> `hw:v4l2` -> NVIDIA HW -> `sw` |
+| `raspi` | `hw:v4l2` -> `hw:omx` -> `sw` |
+| `generic` | `hw:vaapi` -> `hw:v4l2` -> NVIDIA HW -> `hw:omx` -> `sw` |
+
+Codec tie-break preference is stable: `h264` -> `h265` -> `mjpeg`.
+
+If `codec.name:=auto` picks a hardware encoder and runtime fails repeatedly while streaming,
+the bridge now falls back automatically to a software encoder for the same codec.
+This fallback is cross-platform (Jetson/x86/Raspberry/generic) and uses detected encoders from
+`gst-inspect-1.0`, not Jetson-only logic.
+
+Fallback sensitivity can be tuned with:
+
+```bash
+-p runtime.hw_fallback_failures:=3
+```
+
+Adaptive resilience controls:
+
+```bash
+-p runtime.adaptation.enabled:=true \
+-p runtime.adaptation.profile:=balanced \
+-p runtime.adaptation.interval_ms:=2000 \
+-p runtime.adaptation.cooldown_ms:=5000
+```
+
+Supported adaptation profiles:
+
+- `conservative`
+- `balanced`
+- `aggressive`
+
+### Validation automation
+
+Codec/transport matrix script:
+
+```bash
+chmod +x /home/ccu-001/ws_dev/src/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh
+/home/ccu-001/ws_dev/src/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh /home/ccu-001/ws_dev /tmp/matrix.csv
+```
+
+Soak run script:
+
+```bash
+chmod +x /home/ccu-001/ws_dev/src/ros2_gst_video_bridge/scripts/run_soak_profile.zsh
+/home/ccu-001/ws_dev/src/ros2_gst_video_bridge/scripts/run_soak_profile.zsh /home/ccu-001/ws_dev 1800 generic low_latency /camera/image_raw
+```
+
+Release/versioning policy documents:
+
+- `docs/VERSIONING.md`
+- `docs/RELEASE.md`
+
+Example:
+
+```bash
+ros2 run ros2_gst_video_bridge gst_video_bridge_node --ros-args -p codec.name:=auto
+```
 
 ### Discoverability modes (Phase 3)
 

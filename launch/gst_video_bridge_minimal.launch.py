@@ -1,6 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 
@@ -8,7 +9,14 @@ def generate_launch_description():
     profile_machine = LaunchConfiguration('profile_machine')
     profile_stream = LaunchConfiguration('profile_stream')
     input_topic = LaunchConfiguration('input_topic')
+    enable_debayer = LaunchConfiguration('enable_debayer')
+    debayer_output_topic = LaunchConfiguration('debayer_output_topic')
     sink_uri = LaunchConfiguration('sink_uri')
+    codec_name = LaunchConfiguration('codec_name')
+    bridge_input_topic = PythonExpression([
+        "'", debayer_output_topic, "' if '", enable_debayer,
+        "' == 'true' else '", input_topic, "'",
+    ])
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -30,9 +38,35 @@ def generate_launch_description():
             description='ROS image input topic',
         ),
         DeclareLaunchArgument(
+            'enable_debayer',
+            default_value='false',
+            description='Enable image_proc debayer node before bridge (true|false)',
+        ),
+        DeclareLaunchArgument(
+            'debayer_output_topic',
+            default_value='/camera/image_color',
+            description='Debayered image topic used by the bridge when enable_debayer=true',
+        ),
+        DeclareLaunchArgument(
             'sink_uri',
             default_value='srt://127.0.0.1:9000?mode=listener',
             description='Transport URI (SRT/UDP/RTSP/file depending on profile/transport)',
+        ),
+        DeclareLaunchArgument(
+            'codec_name',
+            default_value='auto',
+            description='Codec selection: auto|h264|h265|mjpeg',
+        ),
+        Node(
+            package='image_proc',
+            executable='debayer_node',
+            name='gst_video_bridge_debayer',
+            output='screen',
+            condition=IfCondition(enable_debayer),
+            remappings=[
+                ('image_raw', input_topic),
+                ('image_color', debayer_output_topic),
+            ],
         ),
         Node(
             package='ros2_gst_video_bridge',
@@ -42,7 +76,8 @@ def generate_launch_description():
             parameters=[{
                 'profile.machine': profile_machine,
                 'profile.stream': profile_stream,
-                'input_topic': input_topic,
+                'input_topic': bridge_input_topic,
+                'codec.name': codec_name,
                 'transport.sink_uri': sink_uri,
                 'runtime.mode': 'stream',
             }],

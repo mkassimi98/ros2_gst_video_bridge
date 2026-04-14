@@ -1,0 +1,59 @@
+name: ros2-gst-video-bridge-ci
+
+on:
+  pull_request:
+  push:
+    branches: ["main", "ft/1stversion_w_srt"]
+  schedule:
+    - cron: "0 3 * * *"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup ROS 2 Humble
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+
+      - name: Build
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --event-handlers console_direct+
+
+      - name: Test
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon test --event-handlers console_direct+
+          colcon test-result --all --verbose
+
+  nightly-matrix:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup ROS 2 Humble
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+
+      - name: Build
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --event-handlers console_direct+
+
+      - name: Run matrix
+        run: |
+          chmod +x src/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh
+          src/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh "$PWD" /tmp/matrix.csv
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: transport-codec-matrix-report
+          path: /tmp/matrix.csv

@@ -11,21 +11,19 @@
 #include <string>
 #include <vector>
 
-namespace ros2_gst_video_bridge
-{
+namespace ros2_gst_video_bridge {
 
-class ConfigLoader
-{
+class ConfigLoader {
 public:
-  static GstBridgeConfig loadFromNode(rclcpp::Node & node);
-  static std::vector<std::string> validate(const GstBridgeConfig & config);
-  static std::string toDebugString(const GstBridgeConfig & config);
+  static GstBridgeConfig loadFromNode(rclcpp::Node& node);
+  static std::vector<std::string> validate(const GstBridgeConfig& config);
+  static std::string toDebugString(const GstBridgeConfig& config);
 
 private:
-  static void applyMachineProfileDefaults(GstBridgeConfig & config);
-  static void applyStreamProfileDefaults(GstBridgeConfig & config);
+  static void applyMachineProfileDefaults(GstBridgeConfig& config);
+  static void applyStreamProfileDefaults(GstBridgeConfig& config);
 };
 
-}  // namespace ros2_gst_video_bridge
+} // namespace ros2_gst_video_bridge
 
-#endif  // ROS2_GST_VIDEO_BRIDGE__CORE__CONFIG_LOADER_HPP_
+#endif // ROS2_GST_VIDEO_BRIDGE__CORE__CONFIG_LOADER_HPP_

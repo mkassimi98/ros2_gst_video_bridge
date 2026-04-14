@@ -14,7 +14,7 @@ option(ROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_FORMAT_CHECK "Enable clang-format chec
 option(ROS2_GST_VIDEO_BRIDGE_ENABLE_AMENT_LINT "Enable ament_lint_auto checks" OFF)
 
 if(ROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_TIDY)
-  find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+  find_program(CLANG_TIDY_EXE NAMES clang-tidy clang-tidy-18 clang-tidy-17 clang-tidy-16 clang-tidy-15)
   if(CLANG_TIDY_EXE)
     set(CMAKE_CXX_CLANG_TIDY ${CLANG_TIDY_EXE})
     message(STATUS "clang-tidy enabled: ${CLANG_TIDY_EXE}")
@@ -27,11 +27,12 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(ros2_gst_video_bridge_msgs REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0 gstreamer-app-1.0)
 
 if(ROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_FORMAT_CHECK)
-  find_program(CLANG_FORMAT_EXE NAMES clang-format)
+  find_program(CLANG_FORMAT_EXE NAMES clang-format clang-format-18 clang-format-17 clang-format-16 clang-format-15)
   if(CLANG_FORMAT_EXE)
     file(GLOB_RECURSE ROS2_GST_VIDEO_BRIDGE_FORMAT_FILES CONFIGURE_DEPENDS
       "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
@@ -52,6 +53,13 @@ endif()
 add_executable(gst_video_bridge_node
   src/main.cc
   src/gst_video_bridge_node.cc
+  src/node/core.cc
+  src/node/lifecycle.cc
+  src/node/modes.cc
+  src/node/streaming.cc
+  src/node/recovery.cc
+  src/node/fallback.cc
+  src/node/observability.cc
   src/core/config_loader.cc
   src/core/pipeline_builder.cc
   src/runtime/capability_probe.cc
@@ -76,6 +84,7 @@ ament_target_dependencies(gst_video_bridge_node
   rclcpp
   sensor_msgs
   std_msgs
+  ros2_gst_video_bridge_msgs
 )
 
 install(TARGETS gst_video_bridge_node

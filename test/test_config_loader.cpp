@@ -55,4 +55,13 @@ TEST_F(ConfigLoaderTest, ValidateRejectsInvalidMode)
   EXPECT_FALSE(errors.empty());
 }
 
+TEST_F(ConfigLoaderTest, ValidateAcceptsAutoCodec)
+{
+  ros2_gst_video_bridge::GstBridgeConfig cfg;
+  cfg.codec.name = "auto";
+
+  const auto errors = ros2_gst_video_bridge::ConfigLoader::validate(cfg);
+  EXPECT_TRUE(errors.empty());
+}
+
 }  // namespace

@@ -9,21 +9,15 @@
 #include <cstring>
 #include <sstream>
 
-namespace ros2_gst_video_bridge
-{
+namespace ros2_gst_video_bridge {
 
-StreamEngine::StreamEngine(std::string pipeline)
-: pipeline_(std::move(pipeline))
-{
-}
+StreamEngine::StreamEngine(std::string pipeline) : pipeline_(std::move(pipeline)) {}
 
-StreamEngine::~StreamEngine()
-{
+StreamEngine::~StreamEngine() {
   stop();
 }
 
-bool StreamEngine::start()
-{
+bool StreamEngine::start() {
   std::lock_guard<std::mutex> lock(mutex_);
   last_error_.clear();
 
@@ -36,7 +30,7 @@ bool StreamEngine::start()
     gst_initialized_ = true;
   }
 
-  GError * parse_error = nullptr;
+  GError* parse_error = nullptr;
   pipeline_element_ = gst_parse_launch(pipeline_.c_str(), &parse_error);
   if (parse_error != nullptr) {
     std::ostringstream ss;
@@ -61,13 +55,10 @@ bool StreamEngine::start()
 
   bus_ = gst_element_get_bus(pipeline_element_);
   gst_app_src_set_stream_type(GST_APP_SRC(appsrc_), GST_APP_STREAM_TYPE_STREAM);
-  g_object_set(
-    G_OBJECT(appsrc_),
-    "is-live", TRUE,
-    "format", GST_FORMAT_TIME,
-    nullptr);
+  g_object_set(G_OBJECT(appsrc_), "is-live", TRUE, "format", GST_FORMAT_TIME, nullptr);
 
-  const GstStateChangeReturn state_ret = gst_element_set_state(pipeline_element_, GST_STATE_PLAYING);
+  const GstStateChangeReturn state_ret =
+      gst_element_set_state(pipeline_element_, GST_STATE_PLAYING);
   if (state_ret == GST_STATE_CHANGE_FAILURE) {
     last_error_ = "Failed to transition GStreamer pipeline to PLAYING state.";
     if (bus_ != nullptr) {
@@ -91,8 +82,7 @@ bool StreamEngine::start()
   return true;
 }
 
-void StreamEngine::stop()
-{
+void StreamEngine::stop() {
   running_.store(false);
 
   if (bus_thread_.joinable()) {
@@ -120,28 +110,22 @@ void StreamEngine::stop()
     gst_object_unref(pipeline_element_);
     pipeline_element_ = nullptr;
   }
-
 }
 
-bool StreamEngine::isRunning() const
-{
+bool StreamEngine::isRunning() const {
   return running_.load();
 }
 
-const std::string & StreamEngine::pipeline() const
-{
+const std::string& StreamEngine::pipeline() const {
   return pipeline_;
 }
 
-bool StreamEngine::pushFrame(
-  const uint8_t * data, size_t size, int width, int height, const std::string & gst_format,
-  uint64_t timestamp_ns)
-{
+bool StreamEngine::pushFrame(const uint8_t* data, size_t size, int width, int height,
+                             const std::string& gst_format, uint64_t timestamp_ns) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   if (!running_.load() || appsrc_ == nullptr || pipeline_element_ == nullptr || data == nullptr ||
-    size == 0)
-  {
+      size == 0) {
     return false;
   }
 
@@ -149,7 +133,7 @@ bool StreamEngine::pushFrame(
     return false;
   }
 
-  GstBuffer * buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
+  GstBuffer* buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
   if (buffer == nullptr) {
     last_error_ = "Failed to allocate GstBuffer.";
     return false;
@@ -180,14 +164,12 @@ bool StreamEngine::pushFrame(
   return true;
 }
 
-std::string StreamEngine::lastError() const
-{
+std::string StreamEngine::lastError() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return last_error_;
 }
 
-bool StreamEngine::setAppSrcCaps(int width, int height, const std::string & gst_format)
-{
+bool StreamEngine::setAppSrcCaps(int width, int height, const std::string& gst_format) {
   if (appsrc_ == nullptr) {
     last_error_ = "Cannot set appsrc caps because appsrc is null.";
     return false;
@@ -197,13 +179,9 @@ bool StreamEngine::setAppSrcCaps(int width, int height, const std::string & gst_
     return true;
   }
 
-  GstCaps * caps = gst_caps_new_simple(
-    "video/x-raw",
-    "format", G_TYPE_STRING, gst_format.c_str(),
-    "width", G_TYPE_INT, width,
-    "height", G_TYPE_INT, height,
-    "framerate", GST_TYPE_FRACTION, 0, 1,
-    nullptr);
+  GstCaps* caps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, gst_format.c_str(),
+                                      "width", G_TYPE_INT, width, "height", G_TYPE_INT, height,
+                                      "framerate", GST_TYPE_FRACTION, 0, 1, nullptr);
 
   if (caps == nullptr) {
     last_error_ = "Failed to create GstCaps for appsrc.";
@@ -219,15 +197,15 @@ bool StreamEngine::setAppSrcCaps(int width, int height, const std::string & gst_
   return true;
 }
 
-void StreamEngine::processBusMessages(GstClockTime timeout)
-{
+void StreamEngine::processBusMessages(GstClockTime timeout) {
   if (bus_ == nullptr) {
     return;
   }
 
-  const auto filter = static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_WARNING | GST_MESSAGE_EOS);
-  GstMessage * message = timeout == 0 ? gst_bus_pop_filtered(bus_, filter)
-                                      : gst_bus_timed_pop_filtered(bus_, timeout, filter);
+  const auto filter =
+      static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_WARNING | GST_MESSAGE_EOS);
+  GstMessage* message = timeout == 0 ? gst_bus_pop_filtered(bus_, filter)
+                                     : gst_bus_timed_pop_filtered(bus_, timeout, filter);
 
   while (true) {
     if (message == nullptr) {
@@ -235,8 +213,8 @@ void StreamEngine::processBusMessages(GstClockTime timeout)
     }
 
     if (GST_MESSAGE_TYPE(message) == GST_MESSAGE_ERROR) {
-      GError * error = nullptr;
-      gchar * debug_info = nullptr;
+      GError* error = nullptr;
+      gchar* debug_info = nullptr;
       gst_message_parse_error(message, &error, &debug_info);
       if (error != nullptr) {
         last_error_ = error->message;
@@ -254,8 +232,7 @@ void StreamEngine::processBusMessages(GstClockTime timeout)
   }
 }
 
-void StreamEngine::busLoop(std::stop_token stop_token)
-{
+void StreamEngine::busLoop(std::stop_token stop_token) {
   using namespace std::chrono_literals;
 
   while (!stop_token.stop_requested()) {
@@ -269,4 +246,4 @@ void StreamEngine::busLoop(std::stop_token stop_token)
   }
 }
 
-}  // namespace ros2_gst_video_bridge
+} // namespace ros2_gst_video_bridge

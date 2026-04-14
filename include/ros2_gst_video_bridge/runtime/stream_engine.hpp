@@ -14,11 +14,9 @@
 #include <string>
 #include <thread>
 
-namespace ros2_gst_video_bridge
-{
+namespace ros2_gst_video_bridge {
 
-class StreamEngine
-{
+class StreamEngine {
 public:
   explicit StreamEngine(std::string pipeline);
   ~StreamEngine();
@@ -26,22 +24,21 @@ public:
   bool start();
   void stop();
   bool isRunning() const;
-  const std::string & pipeline() const;
-  bool pushFrame(
-    const uint8_t * data, size_t size, int width, int height, const std::string & gst_format,
-    uint64_t timestamp_ns);
+  const std::string& pipeline() const;
+  bool pushFrame(const uint8_t* data, size_t size, int width, int height,
+                 const std::string& gst_format, uint64_t timestamp_ns);
   std::string lastError() const;
 
 private:
-  bool setAppSrcCaps(int width, int height, const std::string & gst_format);
+  bool setAppSrcCaps(int width, int height, const std::string& gst_format);
   void processBusMessages(GstClockTime timeout);
   void busLoop(std::stop_token stop_token);
 
   std::string pipeline_;
   std::string last_error_;
-  GstElement * pipeline_element_{nullptr};
-  GstElement * appsrc_{nullptr};
-  GstBus * bus_{nullptr};
+  GstElement* pipeline_element_{nullptr};
+  GstElement* appsrc_{nullptr};
+  GstBus* bus_{nullptr};
 
   int caps_width_{0};
   int caps_height_{0};
@@ -53,6 +50,6 @@ private:
   mutable std::mutex mutex_;
 };
 
-}  // namespace ros2_gst_video_bridge
+} // namespace ros2_gst_video_bridge
 
-#endif  // ROS2_GST_VIDEO_BRIDGE__RUNTIME__STREAM_ENGINE_HPP_
+#endif // ROS2_GST_VIDEO_BRIDGE__RUNTIME__STREAM_ENGINE_HPP_
