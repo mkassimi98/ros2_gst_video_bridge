@@ -23,7 +23,7 @@ struct SourceConfig
 struct TransportConfig
 {
   std::string kind{ "srt" };
-  std::string sink_uri{ "srt://127.0.0.1:9000?mode=caller" };
+  std::string sink_uri{ "srt://127.0.0.1:9000?mode=listener" };
   int latency_ms{ 60 };
 
   bool reconnect_enabled{ true };

@@ -70,6 +70,124 @@ source install/setup.bash
 ros2 launch ros2_gst_video_bridge gst_video_bridge.launch.py
 ```
 
+## End-to-End Basler USB Test (SRT Listener -> Caller)
+
+This section documents the validated launch flow for a Basler USB camera with:
+
+- camera node publishing ROS images,
+- bridge node running SRT in listener mode,
+- receiver running as SRT caller.
+
+### 0) One-time USB udev rule for Basler
+
+```bash
+sudo tee /etc/udev/rules.d/99-basler-usb.rules >/dev/null <<'EOF'
+SUBSYSTEM=="usb", ATTR{idVendor}=="2676", MODE="0666", GROUP="plugdev"
+EOF
+
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+Reconnect the USB camera (or reboot) after applying the rule.
+
+### 1) Verify camera detection
+
+```bash
+cd /home/ccu-001/ws_dev
+source /opt/ros/humble/setup.zsh
+source install/setup.zsh
+
+ros2 run camera_aravis2 camera_finder
+```
+
+### 2) Launch camera node (Terminal A)
+
+```bash
+source /opt/ros/humble/setup.zsh
+source /home/ccu-001/ws_dev/install/setup.zsh
+ros2 launch camera_aravis2 camera_driver_uv_example.launch.py guid:=Basler-2676016350B6-23285942
+```
+
+### 3) Launch bridge node in SRT listener mode (Terminal B)
+
+```bash
+source /opt/ros/humble/setup.zsh
+source /home/ccu-001/ws_dev/install/setup.zsh
+ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
+	input_topic:=/camera_driver_uv_example/vis/image_raw \
+	"sink_uri:=srt://0.0.0.0:9000?mode=listener"
+```
+
+### 4) Launch SRT receiver as caller (Terminal C)
+
+```bash
+gst-launch-1.0 -v srtsrc uri="srt://1.0.0.22:9000?mode=caller" latency=60 ! tsdemux ! h264parse ! avdec_h264 ! videoconvert ! autovideosink sync=false
+```
+
+### 5) Quick runtime checks
+
+Check that the camera topic is publishing:
+
+```bash
+source /opt/ros/humble/setup.zsh
+source /home/ccu-001/ws_dev/install/setup.zsh
+ros2 topic hz /camera_driver_uv_example/vis/image_raw
+```
+
+Check bridge runtime metrics:
+
+```bash
+source /opt/ros/humble/setup.zsh
+source /home/ccu-001/ws_dev/install/setup.zsh
+ros2 topic echo /gst_video_bridge/runtime_metrics --once
+```
+
+If `fps_in` and `fps_out` are both greater than zero, the bridge is actively forwarding frames.
+
+### Launch files
+
+- `gst_video_bridge_minimal.launch.py`:
+	- essential arguments only (`profile_machine`, `profile_stream`, `input_topic`, `sink_uri`)
+- `gst_video_bridge_advanced.launch.py`:
+	- full override surface for transport/codec/runtime plus `params_file`
+- `gst_video_bridge.launch.py`:
+	- compatibility wrapper to the advanced launch
+
+Examples:
+
+```bash
+ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
+	profile_machine:=jetson profile_stream:=low_latency \
+	input_topic:=/camera_driver_uv/vis/image_raw \
+	sink_uri:=srt://127.0.0.1:9000?mode=listener
+
+ros2 launch ros2_gst_video_bridge gst_video_bridge_advanced.launch.py \
+	params_file:=/home/ccu-001/ws_dev/src/ros2_gst_video_bridge/config/profiles/jetson_monitoring_udp.yaml
+```
+
+### Curated profile files
+
+Under `config/profiles/`:
+
+- `jetson_low_latency_srt.yaml`
+- `x86_low_latency_srt.yaml`
+- `raspi_low_latency_srt.yaml`
+- `jetson_monitoring_udp.yaml`
+- `x86_monitoring_udp.yaml`
+- `raspi_monitoring_udp.yaml`
+- `recording_file_sink.yaml`
+
+### Runtime metrics
+
+The node publishes runtime metrics on `~/runtime_metrics` (`std_msgs/msg/String`), including:
+
+- state (`connecting|streaming|degraded|reconnecting|failed`)
+- `fps_in`, `fps_out`
+- dropped frame counters
+- reconnect counter
+- latency estimate in milliseconds
+
 ### Discoverability modes (Phase 3)
 
 - List ROS image topics visible on the host:
@@ -98,5 +216,5 @@ ros2 run ros2_gst_video_bridge gst_video_bridge_node --ros-args -p runtime.mode:
 
 ## Current Status
 
-This is a professional starter scaffold with formatting/linting and a minimal ROS 2 node.
-The next implementation milestone is wiring ROS image subscriptions into a real GStreamer `appsrc` pipeline.
+The node now supports ROS image ingestion into a real GStreamer `appsrc` pipeline with runtime modes,
+reconnection policy, and profile-driven launch/configuration.

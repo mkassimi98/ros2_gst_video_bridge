@@ -6,10 +6,56 @@
 #include "ros2_gst_video_bridge/core/config_loader.hpp"
 #include "ros2_gst_video_bridge/core/pipeline_builder.hpp"
 
+#include <sensor_msgs/image_encodings.hpp>
+
+#include <chrono>
+#include <functional>
 #include <sstream>
 
 namespace ros2_gst_video_bridge
 {
+
+namespace
+{
+
+consteval int64_t nanosecondsPerSecond()
+{
+  return 1000000000LL;
+}
+
+bool resolveGstFormat(const std::string & encoding, std::string & gst_format)
+{
+  if (encoding == sensor_msgs::image_encodings::BGR8) {
+    gst_format = "BGR";
+    return true;
+  }
+
+  if (encoding == sensor_msgs::image_encodings::RGB8) {
+    gst_format = "RGB";
+    return true;
+  }
+
+  if (encoding == sensor_msgs::image_encodings::MONO8) {
+    gst_format = "GRAY8";
+    return true;
+  }
+
+  // Fallback for Bayer 8-bit streams (common on raw industrial cameras).
+  // We forward as monochrome to avoid dropping frames when no debayer stage is present.
+  if (
+    encoding == sensor_msgs::image_encodings::BAYER_RGGB8 ||
+    encoding == sensor_msgs::image_encodings::BAYER_BGGR8 ||
+    encoding == sensor_msgs::image_encodings::BAYER_GBRG8 ||
+    encoding == sensor_msgs::image_encodings::BAYER_GRBG8)
+  {
+    gst_format = "GRAY8";
+    return true;
+  }
+
+  return false;
+}
+
+}  // namespace
 
 GstVideoBridgeNode::GstVideoBridgeNode(const rclcpp::NodeOptions & options)
 : Node("gst_video_bridge", options)
@@ -37,14 +83,31 @@ GstVideoBridgeNode::GstVideoBridgeNode(const rclcpp::NodeOptions & options)
   }
 
   initializeModules();
+  initializeSubscriptions();
+  initializeHealthMonitoring();
+
+  if (immediate_exit_code_ >= 0) {
+    return;
+  }
 
   logConfiguration();
   logRuntimeCapabilities();
 
   RCLCPP_INFO(
     this->get_logger(),
-    "Skeleton node ready. Next step: subscribe to raw images from %s and push frames into GStreamer appsrc.",
+    "Streaming node ready. Subscribed to %s and forwarding frames to GStreamer appsrc.",
     config_.source.input_topic.c_str());
+
+  if (stream_engine_ && stream_engine_->isRunning()) {
+    setRuntimeState(RuntimeState::Streaming, "pipeline running and subscriptions active");
+  }
+}
+
+GstVideoBridgeNode::~GstVideoBridgeNode()
+{
+  if (stream_engine_) {
+    stream_engine_->stop();
+  }
 }
 
 bool GstVideoBridgeNode::hasImmediateExit() const
@@ -156,8 +219,243 @@ void GstVideoBridgeNode::initializeModules()
   stream_engine_ = std::make_unique<StreamEngine>(effective_pipeline_);
   metrics_publisher_ = std::make_unique<MetricsPublisher>(*this);
 
-  stream_engine_->start();
+  if (!stream_engine_->start()) {
+    RCLCPP_ERROR(
+      this->get_logger(), "Failed to start stream engine: %s",
+      stream_engine_->lastError().c_str());
+    if (config_.transport.reconnect_enabled) {
+      setRuntimeState(RuntimeState::Degraded, stream_engine_->lastError());
+      reconnect_requested_ = true;
+    } else {
+      setRuntimeState(RuntimeState::Failed, stream_engine_->lastError());
+      immediate_exit_code_ = 1;
+    }
+    return;
+  }
+
+  setRuntimeState(RuntimeState::Connecting, "pipeline started");
+
   metrics_publisher_->publishHeartbeat();
+}
+
+void GstVideoBridgeNode::initializeSubscriptions()
+{
+  if (immediate_exit_code_ >= 0) {
+    return;
+  }
+
+  image_subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
+    config_.source.input_topic,
+    rclcpp::SensorDataQoS(),
+    std::bind(&GstVideoBridgeNode::onImage, this, std::placeholders::_1));
+}
+
+void GstVideoBridgeNode::initializeHealthMonitoring()
+{
+  if (immediate_exit_code_ >= 0) {
+    return;
+  }
+
+  health_timer_ = this->create_wall_timer(
+    std::chrono::milliseconds(500),
+    std::bind(&GstVideoBridgeNode::runHealthCheck, this));
+}
+
+void GstVideoBridgeNode::onImage(const sensor_msgs::msg::Image::SharedPtr msg)
+{
+  if (!stream_engine_ || !stream_engine_->isRunning()) {
+    return;
+  }
+
+  if (config_.runtime.max_fps > 0.0) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto min_period = std::chrono::duration<double>(1.0 / config_.runtime.max_fps);
+    if (last_frame_steady_time_.time_since_epoch().count() != 0 &&
+      (now - last_frame_steady_time_) < min_period)
+    {
+      return;
+    }
+    last_frame_steady_time_ = now;
+  }
+
+  std::string gst_format;
+  if (!resolveGstFormat(msg->encoding, gst_format)) {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 5000,
+      "Unsupported image encoding '%s'. Supported encodings: bgr8, rgb8, mono8, bayer_*8 (grayscale fallback).",
+      msg->encoding.c_str());
+    return;
+  }
+
+  if (
+    msg->encoding == sensor_msgs::image_encodings::BAYER_RGGB8 ||
+    msg->encoding == sensor_msgs::image_encodings::BAYER_BGGR8 ||
+    msg->encoding == sensor_msgs::image_encodings::BAYER_GBRG8 ||
+    msg->encoding == sensor_msgs::image_encodings::BAYER_GRBG8)
+  {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 10000,
+      "Input encoding '%s' is being streamed as GRAY8 fallback. Use image_proc/debayer for color output.",
+      msg->encoding.c_str());
+  }
+
+  uint64_t timestamp_ns = 0;
+  if (config_.runtime.use_wall_clock_timestamps) {
+    timestamp_ns = static_cast<uint64_t>(this->now().nanoseconds());
+  } else {
+    timestamp_ns = static_cast<uint64_t>(
+      static_cast<int64_t>(msg->header.stamp.sec) * nanosecondsPerSecond() +
+      msg->header.stamp.nanosec);
+  }
+
+  if (metrics_publisher_) {
+    const uint64_t now_ns = static_cast<uint64_t>(this->now().nanoseconds());
+    metrics_publisher_->recordFrameIn(now_ns, timestamp_ns);
+  }
+
+  const bool pushed = stream_engine_->pushFrame(
+    msg->data.data(), msg->data.size(), static_cast<int>(msg->width),
+    static_cast<int>(msg->height), gst_format, timestamp_ns);
+
+  if (!pushed) {
+    if (metrics_publisher_) {
+      metrics_publisher_->recordFrameDropped();
+    }
+    scheduleReconnect(stream_engine_->lastError());
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "Failed to push frame to GStreamer: %s", stream_engine_->lastError().c_str());
+  } else if (metrics_publisher_) {
+    metrics_publisher_->recordFrameOut();
+  }
+}
+
+void GstVideoBridgeNode::runHealthCheck()
+{
+  if (!stream_engine_) {
+    return;
+  }
+
+  if (runtime_state_ == RuntimeState::Failed) {
+    return;
+  }
+
+  if (reconnect_requested_) {
+    (void)tryReconnect();
+    return;
+  }
+
+  const auto engine_error = stream_engine_->lastError();
+  if (!engine_error.empty()) {
+    scheduleReconnect(engine_error);
+  }
+}
+
+void GstVideoBridgeNode::scheduleReconnect(const std::string & reason)
+{
+  if (runtime_state_ == RuntimeState::Failed) {
+    return;
+  }
+
+  if (!config_.transport.reconnect_enabled) {
+    setRuntimeState(RuntimeState::Failed, "reconnect disabled: " + reason);
+    return;
+  }
+
+  if (!reconnect_requested_) {
+    reconnect_requested_ = true;
+    setRuntimeState(RuntimeState::Degraded, reason);
+  }
+}
+
+bool GstVideoBridgeNode::tryReconnect()
+{
+  if (!stream_engine_) {
+    return false;
+  }
+
+  const auto now = std::chrono::steady_clock::now();
+  const auto reconnect_interval = std::chrono::milliseconds(config_.transport.reconnect_interval_ms);
+  if (last_reconnect_attempt_.time_since_epoch().count() != 0 &&
+    (now - last_reconnect_attempt_) < reconnect_interval)
+  {
+    return false;
+  }
+
+  if (config_.transport.reconnect_max_attempts > 0 &&
+    reconnect_attempts_ >= config_.transport.reconnect_max_attempts)
+  {
+    setRuntimeState(RuntimeState::Failed, "reconnect attempts exhausted");
+    reconnect_requested_ = false;
+    return false;
+  }
+
+  last_reconnect_attempt_ = now;
+  ++reconnect_attempts_;
+  setRuntimeState(
+    RuntimeState::Reconnecting,
+    "attempt " + std::to_string(reconnect_attempts_));
+
+  stream_engine_->stop();
+  const bool started = stream_engine_->start();
+  if (!started) {
+    setRuntimeState(RuntimeState::Degraded, stream_engine_->lastError());
+    return false;
+  }
+
+  if (metrics_publisher_) {
+    metrics_publisher_->recordReconnect();
+  }
+
+  reconnect_requested_ = false;
+  reconnect_attempts_ = 0;
+  last_frame_steady_time_ = std::chrono::steady_clock::time_point{};
+  setRuntimeState(RuntimeState::Streaming, "reconnected successfully");
+  return true;
+}
+
+void GstVideoBridgeNode::setRuntimeState(RuntimeState new_state, const std::string & reason)
+{
+  if (runtime_state_ == new_state) {
+    return;
+  }
+
+  runtime_state_ = new_state;
+  if (metrics_publisher_) {
+    metrics_publisher_->updateRuntimeState(runtimeStateToString(runtime_state_));
+  }
+  if (reason.empty()) {
+    RCLCPP_INFO(this->get_logger(), "runtime.state=%s", runtimeStateToString(runtime_state_));
+    return;
+  }
+
+  if (new_state == RuntimeState::Degraded || new_state == RuntimeState::Failed) {
+    RCLCPP_WARN(
+      this->get_logger(), "runtime.state=%s reason=%s", runtimeStateToString(runtime_state_),
+      reason.c_str());
+  } else {
+    RCLCPP_INFO(
+      this->get_logger(), "runtime.state=%s reason=%s", runtimeStateToString(runtime_state_),
+      reason.c_str());
+  }
+}
+
+const char * GstVideoBridgeNode::runtimeStateToString(RuntimeState state)
+{
+  switch (state) {
+    case RuntimeState::Connecting:
+      return "connecting";
+    case RuntimeState::Streaming:
+      return "streaming";
+    case RuntimeState::Degraded:
+      return "degraded";
+    case RuntimeState::Reconnecting:
+      return "reconnecting";
+    case RuntimeState::Failed:
+      return "failed";
+    default:
+      return "unknown";
+  }
 }
 
 void GstVideoBridgeNode::logConfiguration() const

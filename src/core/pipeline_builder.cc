@@ -55,7 +55,7 @@ std::string PipelineBuilder::build(const GstBridgeConfig & config)
   const auto transport = toLower(config.transport.kind);
 
   std::ostringstream pipeline;
-  pipeline << "appsrc is-live=true format=time do-timestamp=true ! "
+  pipeline << "appsrc name=bridge_appsrc is-live=true format=time do-timestamp=true ! "
            << "videoconvert ! ";
 
   if (codec == "h265") {
@@ -77,7 +77,7 @@ std::string PipelineBuilder::build(const GstBridgeConfig & config)
   if (transport == "udp") {
     pipeline << "rtph264pay config-interval=1 pt=96 ! ";
   } else {
-    pipeline << "mpegtsmux ! ";
+      pipeline << "mpegtsmux alignment=7 ! ";
   }
 
   if (transport == "udp") {

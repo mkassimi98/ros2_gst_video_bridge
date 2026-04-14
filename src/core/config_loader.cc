@@ -17,6 +17,27 @@ bool inSet(const std::string & value, const std::set<std::string> & allowed)
   return allowed.find(value) != allowed.end();
 }
 
+std::string forceSrtListenerMode(const std::string & sink_uri)
+{
+  if (sink_uri.rfind("srt://", 0) != 0) {
+    return sink_uri;
+  }
+
+  std::string normalized = sink_uri;
+  const auto mode_pos = normalized.find("mode=");
+  if (mode_pos == std::string::npos) {
+    const char separator = normalized.find('?') == std::string::npos ? '?' : '&';
+    normalized += separator;
+    normalized += "mode=listener";
+    return normalized;
+  }
+
+  const auto value_begin = mode_pos + 5;
+  const auto value_end = normalized.find('&', value_begin);
+  normalized.replace(value_begin, value_end == std::string::npos ? std::string::npos : value_end - value_begin, "listener");
+  return normalized;
+}
+
 }  // namespace
 
 GstBridgeConfig ConfigLoader::loadFromNode(rclcpp::Node & node)
@@ -42,6 +63,9 @@ GstBridgeConfig ConfigLoader::loadFromNode(rclcpp::Node & node)
     node.declare_parameter<std::string>("transport.sink_uri", config.transport.sink_uri);
   config.transport.sink_uri =
     node.declare_parameter<std::string>("gst.sink_uri", config.transport.sink_uri);
+  if (config.transport.kind == "srt") {
+    config.transport.sink_uri = forceSrtListenerMode(config.transport.sink_uri);
+  }
   config.transport.latency_ms =
     node.declare_parameter<int>("transport.latency_ms", config.transport.latency_ms);
   config.transport.latency_ms =
@@ -119,12 +143,14 @@ void ConfigLoader::applyStreamProfileDefaults(GstBridgeConfig & config)
     config.codec.gop = 30;
     config.codec.tune = "zerolatency";
     config.transport.kind = "srt";
+    config.transport.sink_uri = "srt://127.0.0.1:9000?mode=listener";
     config.transport.latency_ms = 60;
   } else if (config.profile.stream == "high_quality") {
     config.runtime.max_fps = 30.0;
     config.codec.bitrate_kbps = 6000;
     config.codec.gop = 60;
     config.transport.kind = "srt";
+    config.transport.sink_uri = "srt://127.0.0.1:9000?mode=listener";
     config.transport.latency_ms = 100;
   } else if (config.profile.stream == "monitoring_udp") {
     config.transport.kind = "udp";

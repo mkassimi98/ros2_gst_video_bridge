@@ -1,6 +1,6 @@
 gst_video_bridge:
   ros__parameters:
-    profile.machine: generic
+    profile.machine: jetson
     profile.stream: low_latency
 
     input_topic: /camera_driver_uv/vis/image_raw
@@ -16,17 +16,8 @@ gst_video_bridge:
     codec.profile: baseline
     codec.tune: zerolatency
     codec.rate_control: cbr
-    codec.bitrate_kbps: 2000
+    codec.bitrate_kbps: 2500
     codec.gop: 30
-
-    # Backward-compatible aliases. Prefer transport.* and codec.* above.
-    gst.transport: srt
-    gst.codec: h264
-    gst.profile: baseline
-    gst.sink_uri: srt://127.0.0.1:9000?mode=listener
-    gst.bitrate_kbps: 2000
-    gst.latency_ms: 60
-    gst.pipeline_override: ""
 
     max_fps: 30.0
     use_wall_clock_timestamps: false
