@@ -1,0 +1,34 @@
+gst_video_bridge:
+  ros__parameters:
+    profile.machine: generic
+    profile.stream: low_latency
+
+    input_topic: /camera_driver_uv/vis/image_raw
+
+    transport.kind: srt
+    transport.sink_uri: srt://127.0.0.1:9000?mode=listener
+    transport.latency_ms: 60
+    transport.reconnect.enabled: true
+    transport.reconnect.interval_ms: 1000
+    transport.reconnect.max_attempts: 0
+
+    codec.name: h264
+    codec.profile: baseline
+    codec.tune: zerolatency
+    codec.rate_control: cbr
+    codec.bitrate_kbps: 2000
+    codec.gop: 30
+
+    # Backward-compatible aliases. Prefer transport.* and codec.* above.
+    gst.transport: srt
+    gst.codec: h264
+    gst.profile: baseline
+    gst.sink_uri: srt://127.0.0.1:9000?mode=listener
+    gst.bitrate_kbps: 2000
+    gst.latency_ms: 60
+    gst.pipeline_override: ""
+
+    max_fps: 30.0
+    use_wall_clock_timestamps: false
+    runtime.mode: stream
+    runtime.print_effective_config: true

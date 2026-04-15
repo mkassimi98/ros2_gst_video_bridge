@@ -1,0 +1,25 @@
+gst_video_bridge:
+  ros__parameters:
+    profile.machine: x86
+    profile.stream: monitoring_udp
+
+    input_topic: /camera/image_raw
+
+    transport.kind: udp
+    transport.sink_uri: udp://127.0.0.1:5000
+    transport.latency_ms: 50
+    transport.reconnect.enabled: false
+    transport.reconnect.interval_ms: 1000
+    transport.reconnect.max_attempts: 0
+
+    codec.name: h264
+    codec.profile: baseline
+    codec.tune: zerolatency
+    codec.rate_control: cbr
+    codec.bitrate_kbps: 2500
+    codec.gop: 30
+
+    max_fps: 20.0
+    use_wall_clock_timestamps: false
+    runtime.mode: stream
+    runtime.print_effective_config: true
