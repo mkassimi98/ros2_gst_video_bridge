@@ -1,0 +1,13 @@
+builtin_interfaces/Time stamp
+string session_id
+string stream_id
+string severity
+string code
+string message
+string state
+string codec_name
+string encoder_name
+string transport_kind
+string sink_uri
+uint8 adaptation_level
+bool software_fallback_applied

@@ -45,22 +45,42 @@ Generic ROS 2 video bridge that subscribes to a raw `sensor_msgs/Image` topic an
 
 ```
 ros2_gst_video_bridge/
-	config/                      # Runtime parameters (pipeline, topics, fps, etc.)
-	include/ros2_gst_video_bridge/
-	launch/
-	src/
-	.clang-format
-	.clang-tidy
-	.editorconfig
-	CMakeLists.txt
-	package.xml
+	ros2_gst_video_bridge/       # Node package
+		config/
+		include/ros2_gst_video_bridge/
+		launch/
+		scripts/
+		src/
+		test/
+		CMakeLists.txt
+		package.xml
+	ros2_gst_video_bridge_msgs/  # Runtime status/events/control interfaces
+		msg/
+		srv/
+		CMakeLists.txt
+		package.xml
+	.github/
+	docs/
+	README.md
+	LICENSE
 ```
 
 ## Build
 
+Clone into a ROS 2 workspace and build both packages:
+
+```bash
+mkdir -p ~/ws_dev/src
+cd ~/ws_dev/src
+git clone <repo-url> ros2_gst_video_bridge
+cd ..
+colcon build --packages-up-to ros2_gst_video_bridge
+source install/setup.bash
+```
+
 ```bash
 cd <your_ws>
-colcon build --packages-select ros2_gst_video_bridge
+colcon build --packages-up-to ros2_gst_video_bridge
 source install/setup.bash
 ```
 
@@ -173,12 +193,12 @@ ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
 	sink_uri:=srt://127.0.0.1:9000?mode=listener
 
 ros2 launch ros2_gst_video_bridge gst_video_bridge_advanced.launch.py \
-	params_file:=/home/ccu-001/ws_dev/src/ros2_gst_video_bridge/config/profiles/jetson_monitoring_udp.yaml
+	params_file:=<workspace>/src/ros2_gst_video_bridge/ros2_gst_video_bridge/config/profiles/jetson_monitoring_udp.yaml
 ```
 
 ### Curated profile files
 
-Under `config/profiles/`:
+Under `ros2_gst_video_bridge/config/profiles/`:
 
 - `jetson_low_latency_srt.yaml`
 - `x86_low_latency_srt.yaml`
@@ -264,15 +284,13 @@ Supported adaptation profiles:
 Codec/transport matrix script:
 
 ```bash
-chmod +x /home/ccu-001/ws_dev/src/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh
-/home/ccu-001/ws_dev/src/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh /home/ccu-001/ws_dev /tmp/matrix.csv
+<workspace>/src/ros2_gst_video_bridge/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh <workspace> /tmp/matrix.csv
 ```
 
 Soak run script:
 
 ```bash
-chmod +x /home/ccu-001/ws_dev/src/ros2_gst_video_bridge/scripts/run_soak_profile.zsh
-/home/ccu-001/ws_dev/src/ros2_gst_video_bridge/scripts/run_soak_profile.zsh /home/ccu-001/ws_dev 1800 generic low_latency /camera/image_raw
+<workspace>/src/ros2_gst_video_bridge/ros2_gst_video_bridge/scripts/run_soak_profile.zsh <workspace> 1800 generic low_latency /camera/image_raw
 ```
 
 Release/versioning policy documents:

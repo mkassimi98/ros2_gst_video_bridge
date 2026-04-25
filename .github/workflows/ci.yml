@@ -13,21 +13,46 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          path: ws/src/ros2_gst_video_bridge
 
       - name: Setup ROS 2 Humble
         uses: ros-tooling/setup-ros@v0.7
         with:
           required-ros-distributions: humble
 
+      - name: Install GStreamer dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev
+
       - name: Build
+        working-directory: ws
         run: |
           source /opt/ros/humble/setup.bash
-          colcon build --event-handlers console_direct+
+          colcon build \
+            --packages-select ros2_gst_video_bridge_msgs \
+            --event-handlers console_direct+
+          source install/setup.bash
+          colcon build \
+            --packages-select ros2_gst_video_bridge \
+            --event-handlers console_direct+ \
+            --cmake-args \
+              -DROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_TIDY=OFF \
+              -DROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_FORMAT_CHECK=OFF
 
       - name: Test
+        working-directory: ws
         run: |
           source /opt/ros/humble/setup.bash
-          colcon test --event-handlers console_direct+
+          source install/setup.bash
+          colcon test \
+            --packages-select ros2_gst_video_bridge \
+            --event-handlers console_direct+
           colcon test-result --all --verbose
 
   nightly-matrix:
@@ -36,21 +61,45 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          path: ws/src/ros2_gst_video_bridge
 
       - name: Setup ROS 2 Humble
         uses: ros-tooling/setup-ros@v0.7
         with:
           required-ros-distributions: humble
 
+      - name: Install GStreamer dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev
+
       - name: Build
+        working-directory: ws
         run: |
           source /opt/ros/humble/setup.bash
-          colcon build --event-handlers console_direct+
+          colcon build \
+            --packages-select ros2_gst_video_bridge_msgs \
+            --event-handlers console_direct+
+          source install/setup.bash
+          colcon build \
+            --packages-select ros2_gst_video_bridge \
+            --event-handlers console_direct+ \
+            --cmake-args \
+              -DROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_TIDY=OFF \
+              -DROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_FORMAT_CHECK=OFF
 
       - name: Run matrix
+        working-directory: ws
         run: |
-          chmod +x src/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh
-          src/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh "$PWD" /tmp/matrix.csv
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          chmod +x src/ros2_gst_video_bridge/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh
+          src/ros2_gst_video_bridge/ros2_gst_video_bridge/scripts/run_transport_codec_matrix.zsh "$PWD" /tmp/matrix.csv
 
       - name: Upload report
         uses: actions/upload-artifact@v4
