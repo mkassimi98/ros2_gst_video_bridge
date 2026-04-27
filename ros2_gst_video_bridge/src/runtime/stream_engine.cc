@@ -90,6 +90,10 @@ bool StreamEngine::start() {
   caps_width_ = 0;
   caps_height_ = 0;
   caps_format_.clear();
+  base_source_timestamp_ns_ = 0;
+  last_buffer_pts_ns_ = 0;
+  first_frame_steady_time_ = std::chrono::steady_clock::time_point{};
+  has_buffer_pts_ = false;
   running_.store(true);
   bus_thread_ = std::jthread([this](std::stop_token stop_token) { busLoop(stop_token); });
   processBusMessages(0);
@@ -168,18 +172,22 @@ bool StreamEngine::pushFrame(const uint8_t* data, size_t size, int width, int he
   std::memcpy(map_info.data, data, size);
   gst_buffer_unmap(buffer, &map_info);
 
-  GST_BUFFER_PTS(buffer) = static_cast<GstClockTime>(timestamp_ns);
+  GST_BUFFER_PTS(buffer) = static_cast<GstClockTime>(normalizeBufferPts(timestamp_ns));
   GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;
 
   const GstFlowReturn flow_ret = gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buffer);
-  processBusMessages(0);
+  const bool bus_error = processBusMessages(0);
   if (flow_ret != GST_FLOW_OK) {
     std::ostringstream ss;
     ss << "appsrc push failed with flow status " << flow_ret;
     last_error_ = ss.str();
     return false;
   }
+  if (bus_error) {
+    return false;
+  }
 
+  last_error_.clear();
   return true;
 }
 
@@ -204,9 +212,9 @@ bool StreamEngine::setAppSrcCaps(int width, int height, const std::string& gst_f
                                "width", G_TYPE_INT, width, "height", G_TYPE_INT, height,
                                "framerate", GST_TYPE_FRACTION, 0, 1, nullptr);
   } else {
-    caps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, gst_format.c_str(),
-                               "width", G_TYPE_INT, width, "height", G_TYPE_INT, height,
-                               "framerate", GST_TYPE_FRACTION, 0, 1, nullptr);
+    caps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, gst_format.c_str(), "width",
+                               G_TYPE_INT, width, "height", G_TYPE_INT, height, "framerate",
+                               GST_TYPE_FRACTION, 0, 1, nullptr);
   }
 
   if (caps == nullptr) {
@@ -223,6 +231,32 @@ bool StreamEngine::setAppSrcCaps(int width, int height, const std::string& gst_f
   return true;
 }
 
+uint64_t StreamEngine::normalizeBufferPts(uint64_t source_timestamp_ns) {
+  const auto now = std::chrono::steady_clock::now();
+  if (first_frame_steady_time_.time_since_epoch().count() == 0) {
+    first_frame_steady_time_ = now;
+    base_source_timestamp_ns_ = source_timestamp_ns;
+  }
+
+  uint64_t pts_ns = 0;
+  if (source_timestamp_ns > 0 && base_source_timestamp_ns_ > 0 &&
+      source_timestamp_ns >= base_source_timestamp_ns_) {
+    pts_ns = source_timestamp_ns - base_source_timestamp_ns_;
+  } else {
+    pts_ns = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(now - first_frame_steady_time_)
+            .count());
+  }
+
+  if (has_buffer_pts_ && pts_ns <= last_buffer_pts_ns_) {
+    pts_ns = last_buffer_pts_ns_ + 1;
+  }
+
+  last_buffer_pts_ns_ = pts_ns;
+  has_buffer_pts_ = true;
+  return pts_ns;
+}
+
 bool StreamEngine::isAppSrcQueueFull() {
   if (appsrc_ == nullptr) {
     return false;
@@ -233,11 +267,12 @@ bool StreamEngine::isAppSrcQueueFull() {
   return queued_buffers >= kMaxAppSrcQueuedBuffers;
 }
 
-void StreamEngine::processBusMessages(GstClockTime timeout) {
+bool StreamEngine::processBusMessages(GstClockTime timeout) {
   if (bus_ == nullptr) {
-    return;
+    return false;
   }
 
+  bool has_error = false;
   const auto filter =
       static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_WARNING | GST_MESSAGE_EOS);
   GstMessage* message = timeout == 0 ? gst_bus_pop_filtered(bus_, filter)
@@ -254,6 +289,7 @@ void StreamEngine::processBusMessages(GstClockTime timeout) {
       gst_message_parse_error(message, &error, &debug_info);
       if (error != nullptr) {
         last_error_ = error->message;
+        has_error = true;
         g_error_free(error);
       }
       if (debug_info != nullptr) {
@@ -261,11 +297,14 @@ void StreamEngine::processBusMessages(GstClockTime timeout) {
       }
     } else if (GST_MESSAGE_TYPE(message) == GST_MESSAGE_EOS) {
       last_error_ = "GStreamer pipeline reached EOS.";
+      has_error = true;
     }
 
     gst_message_unref(message);
     message = gst_bus_pop_filtered(bus_, filter);
   }
+
+  return has_error;
 }
 
 void StreamEngine::busLoop(std::stop_token stop_token) {

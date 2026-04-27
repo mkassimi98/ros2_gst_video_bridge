@@ -71,6 +71,7 @@ TEST(PipelineBuilderTest, BuildsH265PipelinesAcrossTransports) {
   EXPECT_NE(pipeline.find("h265parse"), std::string::npos);
   EXPECT_NE(pipeline.find("mpegtsmux"), std::string::npos);
   EXPECT_NE(pipeline.find("srtsink"), std::string::npos);
+  EXPECT_NE(pipeline.find("poll-timeout=100"), std::string::npos);
 
   cfg.transport.kind = "udp";
   cfg.transport.sink_uri = "udp://10.1.2.3:7000";

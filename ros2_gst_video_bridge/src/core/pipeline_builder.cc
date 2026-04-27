@@ -280,6 +280,7 @@ std::string PipelineBuilder::build(const GstBridgeConfig& config) {
              << "uri=" << config.transport.sink_uri << " "
              << "latency=" << config.transport.latency_ms << " "
              << "wait-for-connection=false "
+             << "poll-timeout=100 "
              << "sync=false async=false";
   }
 

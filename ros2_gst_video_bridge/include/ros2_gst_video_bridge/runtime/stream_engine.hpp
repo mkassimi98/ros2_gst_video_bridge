@@ -7,6 +7,7 @@
 #include <gst/gst.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -31,8 +32,9 @@ public:
 
 private:
   bool setAppSrcCaps(int width, int height, const std::string& gst_format);
+  uint64_t normalizeBufferPts(uint64_t source_timestamp_ns);
   bool isAppSrcQueueFull();
-  void processBusMessages(GstClockTime timeout);
+  bool processBusMessages(GstClockTime timeout);
   void busLoop(std::stop_token stop_token);
 
   std::string pipeline_;
@@ -43,6 +45,10 @@ private:
   int caps_width_{0};
   int caps_height_{0};
   std::string caps_format_;
+  uint64_t base_source_timestamp_ns_{0};
+  uint64_t last_buffer_pts_ns_{0};
+  std::chrono::steady_clock::time_point first_frame_steady_time_{};
+  bool has_buffer_pts_{false};
 
   std::string last_error_;
 
