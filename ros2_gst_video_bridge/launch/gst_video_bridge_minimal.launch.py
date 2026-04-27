@@ -13,6 +13,7 @@ def generate_launch_description():
     debayer_output_topic = LaunchConfiguration('debayer_output_topic')
     sink_uri = LaunchConfiguration('sink_uri')
     codec_name = LaunchConfiguration('codec_name')
+    codec_encoder = LaunchConfiguration('codec_encoder')
     runtime_mode = LaunchConfiguration('runtime_mode')
     bridge_input_topic = PythonExpression([
         "'", debayer_output_topic, "' if '", enable_debayer,
@@ -59,6 +60,11 @@ def generate_launch_description():
             description='Codec selection: auto|av1|h265|h264|mjpeg',
         ),
         DeclareLaunchArgument(
+            'codec_encoder',
+            default_value='',
+            description='Optional GStreamer encoder override, e.g. nvv4l2h265enc',
+        ),
+        DeclareLaunchArgument(
             'runtime_mode',
             default_value='stream',
             description='Runtime mode: stream|list_topics|list_capabilities|validate_config|discover',
@@ -84,6 +90,7 @@ def generate_launch_description():
                 'profile.stream': profile_stream,
                 'input_topic': bridge_input_topic,
                 'codec.name': codec_name,
+                'codec.encoder': codec_encoder,
                 'transport.sink_uri': sink_uri,
                 'runtime.mode': runtime_mode,
             }],

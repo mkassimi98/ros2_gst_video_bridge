@@ -210,6 +210,28 @@ ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
 	"sink_uri:=srt://0.0.0.0:9000?mode=listener"
 ```
 
+To force H.265 with the Jetson/NVIDIA hardware encoder:
+
+```bash
+source /opt/ros/humble/setup.zsh
+source /home/ccu-001/ws_dev/install/setup.zsh
+
+ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
+	input_topic:=/camera_driver_uv_example/vis/image_raw \
+	codec_name:=h265 \
+	codec_encoder:=nvv4l2h265enc \
+	profile_machine:=jetson \
+	profile_stream:=low_latency \
+	"sink_uri:=srt://0.0.0.0:9000?mode=listener"
+```
+
+Receiver for H.265 over SRT/MPEG-TS:
+
+```bash
+gst-launch-1.0 -v srtsrc uri="srt://<bridge_ip>:9000?mode=caller" latency=60 ! \
+	tsdemux ! h265parse ! avdec_h265 ! videoconvert ! autovideosink sync=false
+```
+
 For 8-bit Bayer cameras, the bridge now enables in-pipeline debayer automatically on first frame.
 If you prefer an explicit ROS-side color topic, or if your camera publishes 16-bit Bayer, you can
 still enable optional debayer before the bridge:
@@ -253,7 +275,8 @@ If `fps_in` and `fps_out` are both greater than zero, the bridge is actively for
 ### Launch files
 
 - `gst_video_bridge_minimal.launch.py`:
-	- essential arguments only (`profile_machine`, `profile_stream`, `input_topic`, `sink_uri`)
+	- essential arguments only (`profile_machine`, `profile_stream`, `input_topic`, `sink_uri`,
+	  `codec_name`, `codec_encoder`)
 - `gst_video_bridge_advanced.launch.py`:
 	- full override surface for transport/codec/runtime plus `params_file`
 - `gst_video_bridge.launch.py`:

@@ -38,6 +38,7 @@ def generate_launch_description():
         DeclareLaunchArgument('reconnect_interval_ms', default_value='1000'),
         DeclareLaunchArgument('reconnect_max_attempts', default_value='0'),
         DeclareLaunchArgument('codec_name', default_value='auto'),
+        DeclareLaunchArgument('codec_encoder', default_value=''),
         DeclareLaunchArgument('codec_profile', default_value='baseline'),
         DeclareLaunchArgument('codec_tune', default_value='zerolatency'),
         DeclareLaunchArgument('codec_rate_control', default_value='cbr'),
@@ -81,6 +82,7 @@ def generate_launch_description():
                         'reconnect_max_attempts'
                     ),
                     'codec.name': LaunchConfiguration('codec_name'),
+                    'codec.encoder': LaunchConfiguration('codec_encoder'),
                     'codec.profile': LaunchConfiguration('codec_profile'),
                     'codec.tune': LaunchConfiguration('codec_tune'),
                     'codec.rate_control': LaunchConfiguration('codec_rate_control'),
