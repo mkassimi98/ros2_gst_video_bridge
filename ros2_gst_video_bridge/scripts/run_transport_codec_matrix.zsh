@@ -1,14 +1,19 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
-source /opt/ros/humble/setup.zsh
-source "${1:-/home/ccu-001/ws_dev}/install/setup.zsh"
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <workspace> [report.csv]" >&2
+  exit 2
+fi
 
-declare -a codecs=(h264 h265 mjpeg)
+source /opt/ros/humble/setup.zsh
+source "$1/install/setup.zsh"
+
+declare -a codecs=(av1 h265 h264 mjpeg)
 declare -a transports=(srt udp rtsp file)
 
 report="${2:-/tmp/ros2_gst_video_bridge_matrix.csv}"
-echo "codec,transport,result,details" > "$report"
+echo "codec,transport,stage,result,details" > "$report"
 
 for codec in "${codecs[@]}"; do
   for transport in "${transports[@]}"; do
@@ -19,7 +24,7 @@ for codec in "${codecs[@]}"; do
       rtsp) sink_uri="rtsp://127.0.0.1:8554/live" ;;
       file)
         ext="ts"
-        [[ "$codec" == "mjpeg" ]] && ext="mkv"
+        [[ "$codec" == "av1" || "$codec" == "mjpeg" ]] && ext="mkv"
         sink_uri="/tmp/bridge_${codec}.${ext}"
         ;;
     esac
@@ -29,10 +34,10 @@ for codec in "${codecs[@]}"; do
       -p codec.name:="$codec" \
       -p transport.kind:="$transport" \
       -p transport.sink_uri:="$sink_uri" >/tmp/bridge_matrix_case.log 2>&1; then
-      echo "${codec},${transport},PASS,validate_config" >> "$report"
+      echo "${codec},${transport},config,PASS,validate_config" >> "$report"
     else
       detail=$(tr '\n' ' ' </tmp/bridge_matrix_case.log | sed 's/,/;/g' | cut -c1-200)
-      echo "${codec},${transport},FAIL,${detail}" >> "$report"
+      echo "${codec},${transport},config,FAIL,${detail}" >> "$report"
     fi
   done
 done

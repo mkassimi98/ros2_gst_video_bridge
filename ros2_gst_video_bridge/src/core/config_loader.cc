@@ -2,6 +2,7 @@
 // Contact: mouhsine98@gmail.com
 
 #include "ros2_gst_video_bridge/core/config_loader.hpp"
+#include "ros2_gst_video_bridge/detail/string_utils.hpp"
 
 #include <set>
 #include <sstream>
@@ -12,10 +13,6 @@ namespace {
 
 bool inSet(const std::string& value, const std::set<std::string>& allowed) {
   return allowed.find(value) != allowed.end();
-}
-
-bool startsWith(const std::string& value, const std::string& prefix) {
-  return value.rfind(prefix, 0) == 0;
 }
 
 std::string forceSrtListenerMode(const std::string& sink_uri) {
@@ -57,20 +54,20 @@ GstBridgeConfig ConfigLoader::loadFromNode(rclcpp::Node& node) {
       node.declare_parameter<std::string>("input_topic", config.source.input_topic);
 
   config.transport.kind =
-      node.declare_parameter<std::string>("transport.kind", config.transport.kind);
-  config.transport.kind =
       node.declare_parameter<std::string>("gst.transport", config.transport.kind);
-  config.transport.sink_uri =
-      node.declare_parameter<std::string>("transport.sink_uri", config.transport.sink_uri);
+  config.transport.kind =
+      node.declare_parameter<std::string>("transport.kind", config.transport.kind);
   config.transport.sink_uri =
       node.declare_parameter<std::string>("gst.sink_uri", config.transport.sink_uri);
+  config.transport.sink_uri =
+      node.declare_parameter<std::string>("transport.sink_uri", config.transport.sink_uri);
   if (config.transport.kind == "srt") {
     config.transport.sink_uri = forceSrtListenerMode(config.transport.sink_uri);
   }
   config.transport.latency_ms =
-      node.declare_parameter<int>("transport.latency_ms", config.transport.latency_ms);
-  config.transport.latency_ms =
       node.declare_parameter<int>("gst.latency_ms", config.transport.latency_ms);
+  config.transport.latency_ms =
+      node.declare_parameter<int>("transport.latency_ms", config.transport.latency_ms);
   config.transport.reconnect_enabled = node.declare_parameter<bool>(
       "transport.reconnect.enabled", config.transport.reconnect_enabled);
   config.transport.reconnect_interval_ms = node.declare_parameter<int>(
@@ -78,18 +75,18 @@ GstBridgeConfig ConfigLoader::loadFromNode(rclcpp::Node& node) {
   config.transport.reconnect_max_attempts = node.declare_parameter<int>(
       "transport.reconnect.max_attempts", config.transport.reconnect_max_attempts);
 
-  config.codec.name = node.declare_parameter<std::string>("codec.name", config.codec.name);
   config.codec.name = node.declare_parameter<std::string>("gst.codec", config.codec.name);
+  config.codec.name = node.declare_parameter<std::string>("codec.name", config.codec.name);
   config.codec.encoder = node.declare_parameter<std::string>("codec.encoder", config.codec.encoder);
-  config.codec.profile = node.declare_parameter<std::string>("codec.profile", config.codec.profile);
   config.codec.profile = node.declare_parameter<std::string>("gst.profile", config.codec.profile);
+  config.codec.profile = node.declare_parameter<std::string>("codec.profile", config.codec.profile);
   config.codec.tune = node.declare_parameter<std::string>("codec.tune", config.codec.tune);
   config.codec.rate_control =
       node.declare_parameter<std::string>("codec.rate_control", config.codec.rate_control);
   config.codec.bitrate_kbps =
-      node.declare_parameter<int>("codec.bitrate_kbps", config.codec.bitrate_kbps);
-  config.codec.bitrate_kbps =
       node.declare_parameter<int>("gst.bitrate_kbps", config.codec.bitrate_kbps);
+  config.codec.bitrate_kbps =
+      node.declare_parameter<int>("codec.bitrate_kbps", config.codec.bitrate_kbps);
   config.codec.gop = node.declare_parameter<int>("codec.gop", config.codec.gop);
 
   config.runtime.max_fps = node.declare_parameter<double>("max_fps", config.runtime.max_fps);
@@ -107,18 +104,18 @@ GstBridgeConfig ConfigLoader::loadFromNode(rclcpp::Node& node) {
 
 void ConfigLoader::applyMachineProfileDefaults(GstBridgeConfig& config) {
   if (config.profile.machine == "jetson") {
-    config.codec.name = "h264";
+    config.codec.name = "auto";
     config.codec.tune = "zerolatency";
     config.codec.bitrate_kbps = 2500;
     config.codec.gop = 30;
     config.transport.latency_ms = 70;
   } else if (config.profile.machine == "x86") {
-    config.codec.name = "h264";
+    config.codec.name = "auto";
     config.codec.bitrate_kbps = 4000;
     config.codec.gop = 60;
     config.transport.latency_ms = 90;
   } else if (config.profile.machine == "raspi") {
-    config.codec.name = "h264";
+    config.codec.name = "auto";
     config.codec.profile = "main";
     config.codec.tune = "zerolatency";
     config.codec.bitrate_kbps = 1800;
@@ -166,7 +163,7 @@ std::vector<std::string> ConfigLoader::validate(const GstBridgeConfig& config) {
   const std::set<std::string> valid_modes{"stream", "list_topics", "list_capabilities",
                                           "validate_config", "discover"};
   const std::set<std::string> valid_transports{"srt", "rtsp", "udp", "file"};
-  const std::set<std::string> valid_codecs{"auto", "h264", "h265", "mjpeg"};
+  const std::set<std::string> valid_codecs{"auto", "av1", "h265", "h264", "mjpeg"};
 
   if (!inSet(config.profile.machine, valid_machines)) {
     errors.emplace_back(
@@ -205,13 +202,17 @@ std::vector<std::string> ConfigLoader::validate(const GstBridgeConfig& config) {
 
   if (!config.gst.pipeline_override.empty()) {
     // Custom pipeline override takes full responsibility for compatibility checks.
-  } else if (config.transport.kind == "srt" && !startsWith(config.transport.sink_uri, "srt://")) {
+  } else if (config.transport.kind == "srt" &&
+             !detail::startsWith(config.transport.sink_uri, "srt://")) {
     errors.emplace_back("transport.sink_uri must start with 'srt://' when transport.kind=srt.");
-  } else if (config.transport.kind == "rtsp" && !startsWith(config.transport.sink_uri, "rtsp://")) {
+  } else if (config.transport.kind == "rtsp" &&
+             !detail::startsWith(config.transport.sink_uri, "rtsp://")) {
     errors.emplace_back("transport.sink_uri must start with 'rtsp://' when transport.kind=rtsp.");
-  } else if (config.transport.kind == "udp" && !startsWith(config.transport.sink_uri, "udp://")) {
+  } else if (config.transport.kind == "udp" &&
+             !detail::startsWith(config.transport.sink_uri, "udp://")) {
     errors.emplace_back("transport.sink_uri must start with 'udp://' when transport.kind=udp.");
-  } else if (config.transport.kind == "file" && startsWith(config.transport.sink_uri, "udp://")) {
+  } else if (config.transport.kind == "file" &&
+             detail::startsWith(config.transport.sink_uri, "udp://")) {
     errors.emplace_back(
         "transport.sink_uri for transport.kind=file must be a file path, not UDP URI.");
   }
@@ -229,8 +230,9 @@ std::vector<std::string> ConfigLoader::validate(const GstBridgeConfig& config) {
   }
 
   if (!inSet(config.codec.name, valid_codecs)) {
-    errors.emplace_back("codec.name must be one of [auto, h264, h265, mjpeg]. Current value: '" +
-                        config.codec.name + "'.");
+    errors.emplace_back(
+        "codec.name must be one of [auto, av1, h265, h264, mjpeg]. Current value: '" +
+        config.codec.name + "'.");
   }
 
   if (config.codec.bitrate_kbps <= 0) {

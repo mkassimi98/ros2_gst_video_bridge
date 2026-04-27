@@ -4,6 +4,7 @@
 #include "ros2_gst_video_bridge/gst_video_bridge_node.hpp"
 
 #include "ros2_gst_video_bridge/core/pipeline_builder.hpp"
+#include "ros2_gst_video_bridge/detail/adaptation.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -52,6 +53,13 @@ void GstVideoBridgeNode::evaluateAdaptationPolicy() {
   }
 
   if (target_level != adaptation_level_) {
+    const bool recovering_quality = target_level < adaptation_level_;
+    if (recovering_quality && last_adaptation_ns_ != 0) {
+      const uint64_t since_last_ms = (now_ns - last_adaptation_ns_) / 1000000ULL;
+      if (since_last_ms < static_cast<uint64_t>(adaptation_cooldown_ms_)) {
+        return;
+      }
+    }
     applyAdaptationLevel(target_level, "runtime state transition");
     last_adaptation_ns_ = now_ns;
   }
@@ -60,19 +68,9 @@ void GstVideoBridgeNode::evaluateAdaptationPolicy() {
 void GstVideoBridgeNode::applyAdaptationLevel(uint8_t level, const std::string& reason) {
   adaptation_level_ = std::min<uint8_t>(2, level);
 
-  double fps_scale = 1.0;
-  double bitrate_scale = 1.0;
-
-  if (adaptation_profile_ == "conservative") {
-    fps_scale = adaptation_level_ == 0 ? 1.0 : (adaptation_level_ == 1 ? 0.85 : 0.70);
-    bitrate_scale = adaptation_level_ == 0 ? 1.0 : (adaptation_level_ == 1 ? 0.75 : 0.55);
-  } else if (adaptation_profile_ == "aggressive") {
-    fps_scale = adaptation_level_ == 0 ? 1.0 : (adaptation_level_ == 1 ? 0.75 : 0.55);
-    bitrate_scale = adaptation_level_ == 0 ? 1.0 : (adaptation_level_ == 1 ? 0.60 : 0.40);
-  } else {
-    fps_scale = adaptation_level_ == 0 ? 1.0 : (adaptation_level_ == 1 ? 0.80 : 0.60);
-    bitrate_scale = adaptation_level_ == 0 ? 1.0 : (adaptation_level_ == 1 ? 0.65 : 0.45);
-  }
+  const auto scales = detail::computeAdaptationScales(adaptation_profile_, adaptation_level_);
+  const double fps_scale = scales.fps_scale;
+  const double bitrate_scale = scales.bitrate_scale;
 
   const int next_bitrate = std::max(400, static_cast<int>(base_bitrate_kbps_ * bitrate_scale));
   const int next_gop =

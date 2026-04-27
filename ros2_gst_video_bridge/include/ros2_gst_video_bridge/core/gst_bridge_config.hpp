@@ -15,6 +15,8 @@ struct ProfileConfig {
 
 struct SourceConfig {
   std::string input_topic{"/camera/image_raw"};
+  bool auto_debayer{true};
+  std::string detected_bayer_format;
 };
 
 struct TransportConfig {
@@ -28,8 +30,8 @@ struct TransportConfig {
 };
 
 struct CodecConfig {
-  std::string name{"h264"};
-  std::string encoder{""};
+  std::string name{"auto"};
+  std::string encoder;
   std::string profile{"baseline"};
   std::string tune{"zerolatency"};
   std::string rate_control{"cbr"};

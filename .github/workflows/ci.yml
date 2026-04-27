@@ -8,7 +8,25 @@ on:
     - cron: "0 3 * * *"
 
 jobs:
+  clang-format-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang-format-15
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-15
+
+      - name: Check formatting
+        run: |
+          find ros2_gst_video_bridge/include ros2_gst_video_bridge/src \
+               \( -name '*.hpp' -o -name '*.cc' \) | \
+            xargs clang-format-15 --dry-run --Werror
+
   build-and-test:
+    needs: clang-format-check
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -25,8 +43,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            gstreamer1.0-tools \
             gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-libav \
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev
 
@@ -35,11 +56,7 @@ jobs:
         run: |
           source /opt/ros/humble/setup.bash
           colcon build \
-            --packages-select ros2_gst_video_bridge_msgs \
-            --event-handlers console_direct+
-          source install/setup.bash
-          colcon build \
-            --packages-select ros2_gst_video_bridge \
+            --packages-up-to ros2_gst_video_bridge \
             --event-handlers console_direct+ \
             --cmake-args \
               -DROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_TIDY=OFF \
@@ -54,6 +71,23 @@ jobs:
             --packages-select ros2_gst_video_bridge \
             --event-handlers console_direct+
           colcon test-result --all --verbose
+
+      - name: Resilience preflight smoke
+        working-directory: ws
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          build/ros2_gst_video_bridge/gst_video_bridge_node \
+            --ros-args \
+            -p runtime.mode:=validate_config \
+            -p codec.name:=h264 \
+            -p codec.encoder:=definitely_missing_encoder
+
+          build/ros2_gst_video_bridge/gst_video_bridge_node \
+            --ros-args \
+            -p runtime.mode:=validate_config \
+            -p transport.kind:=rtsp \
+            -p transport.sink_uri:=rtsp://127.0.0.1:8554/live
 
   nightly-matrix:
     if: github.event_name == 'schedule'
@@ -73,8 +107,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            gstreamer1.0-tools \
             gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-libav \
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev
 
@@ -83,11 +120,7 @@ jobs:
         run: |
           source /opt/ros/humble/setup.bash
           colcon build \
-            --packages-select ros2_gst_video_bridge_msgs \
-            --event-handlers console_direct+
-          source install/setup.bash
-          colcon build \
-            --packages-select ros2_gst_video_bridge \
+            --packages-up-to ros2_gst_video_bridge \
             --event-handlers console_direct+ \
             --cmake-args \
               -DROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_TIDY=OFF \

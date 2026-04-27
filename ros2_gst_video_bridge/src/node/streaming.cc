@@ -4,8 +4,7 @@
 #include "ros2_gst_video_bridge/gst_video_bridge_node.hpp"
 
 #include "ros2_gst_video_bridge/core/pipeline_builder.hpp"
-
-#include <sensor_msgs/image_encodings.hpp>
+#include "ros2_gst_video_bridge/runtime/image_format.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -20,73 +19,8 @@ consteval int64_t nanosecondsPerSecond() {
   return 1000000000LL;
 }
 
-bool resolveGstFormat(const std::string& encoding, std::string& gst_format) {
-  if (encoding == sensor_msgs::image_encodings::BGR8 ||
-      encoding == sensor_msgs::image_encodings::TYPE_8UC3 ||
-      encoding == sensor_msgs::image_encodings::TYPE_8SC3) {
-    gst_format = "BGR";
-    return true;
-  }
-
-  if (encoding == sensor_msgs::image_encodings::RGB8) {
-    gst_format = "RGB";
-    return true;
-  }
-
-  if (encoding == sensor_msgs::image_encodings::BGRA8 ||
-      encoding == sensor_msgs::image_encodings::TYPE_8UC4 ||
-      encoding == sensor_msgs::image_encodings::TYPE_8SC4) {
-    gst_format = "BGRA";
-    return true;
-  }
-
-  if (encoding == sensor_msgs::image_encodings::RGBA8) {
-    gst_format = "RGBA";
-    return true;
-  }
-
-  if (encoding == sensor_msgs::image_encodings::MONO8 ||
-      encoding == sensor_msgs::image_encodings::TYPE_8UC1 ||
-      encoding == sensor_msgs::image_encodings::TYPE_8SC1) {
-    gst_format = "GRAY8";
-    return true;
-  }
-
-  if (encoding == sensor_msgs::image_encodings::MONO16 ||
-      encoding == sensor_msgs::image_encodings::TYPE_16UC1 ||
-      encoding == sensor_msgs::image_encodings::TYPE_16SC1) {
-    gst_format = "GRAY16_LE";
-    return true;
-  }
-
-  if (encoding == sensor_msgs::image_encodings::BAYER_RGGB8 ||
-      encoding == sensor_msgs::image_encodings::BAYER_BGGR8 ||
-      encoding == sensor_msgs::image_encodings::BAYER_GBRG8 ||
-      encoding == sensor_msgs::image_encodings::BAYER_GRBG8) {
-    gst_format = "GRAY8";
-    return true;
-  }
-
-  if (encoding == sensor_msgs::image_encodings::BAYER_RGGB16 ||
-      encoding == sensor_msgs::image_encodings::BAYER_BGGR16 ||
-      encoding == sensor_msgs::image_encodings::BAYER_GBRG16 ||
-      encoding == sensor_msgs::image_encodings::BAYER_GRBG16) {
-    gst_format = "GRAY16_LE";
-    return true;
-  }
-
-  return false;
-}
-
-bool isBayerEncoding(const std::string& encoding) {
-  return encoding == sensor_msgs::image_encodings::BAYER_RGGB8 ||
-         encoding == sensor_msgs::image_encodings::BAYER_BGGR8 ||
-         encoding == sensor_msgs::image_encodings::BAYER_GBRG8 ||
-         encoding == sensor_msgs::image_encodings::BAYER_GRBG8 ||
-         encoding == sensor_msgs::image_encodings::BAYER_RGGB16 ||
-         encoding == sensor_msgs::image_encodings::BAYER_BGGR16 ||
-         encoding == sensor_msgs::image_encodings::BAYER_GBRG16 ||
-         encoding == sensor_msgs::image_encodings::BAYER_GRBG16;
+bool isBackpressureOnlyError(const std::string& error) {
+  return error.rfind("appsrc queue full", 0) == 0;
 }
 
 } // namespace
@@ -162,35 +96,18 @@ void GstVideoBridgeNode::initializeHealthMonitoring() {
 }
 
 void GstVideoBridgeNode::onImage(const sensor_msgs::msg::Image::SharedPtr msg) {
-  if (!stream_engine_ || !stream_engine_->isRunning()) {
+  if (!stream_engine_ || !stream_engine_->isRunning() || pipeline_reconfigure_requested_) {
     return;
   }
 
-  if (config_.runtime.max_fps > 0.0) {
-    const auto now = std::chrono::steady_clock::now();
-    const auto min_period = std::chrono::duration<double>(1.0 / config_.runtime.max_fps);
-    if (last_frame_steady_time_.time_since_epoch().count() != 0 &&
-        (now - last_frame_steady_time_) < min_period) {
-      return;
+  const auto validation = validateImageShape(*msg);
+  if (!validation.valid) {
+    if (metrics_publisher_) {
+      metrics_publisher_->recordFrameDroppedMalformed();
     }
-    last_frame_steady_time_ = now;
-  }
-
-  std::string gst_format;
-  if (!resolveGstFormat(msg->encoding, gst_format)) {
-    RCLCPP_WARN_THROTTLE(
-        this->get_logger(), *this->get_clock(), 5000,
-        "Unsupported image encoding '%s'. Supported encodings include mono8/mono16, rgb8/bgr8, "
-        "rgba8/bgra8, type_8/16 C1/C3/C4, and bayer_*8/*16 (grayscale fallback).",
-        msg->encoding.c_str());
+    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "Dropping image: %s",
+                         validation.error.c_str());
     return;
-  }
-
-  if (isBayerEncoding(msg->encoding)) {
-    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 10000,
-                         "Input encoding '%s' is being streamed as grayscale Bayer fallback. Use "
-                         "image_proc/debayer for color output.",
-                         msg->encoding.c_str());
   }
 
   uint64_t timestamp_ns = 0;
@@ -200,6 +117,9 @@ void GstVideoBridgeNode::onImage(const sensor_msgs::msg::Image::SharedPtr msg) {
     timestamp_ns =
         static_cast<uint64_t>(static_cast<int64_t>(msg->header.stamp.sec) * nanosecondsPerSecond() +
                               msg->header.stamp.nanosec);
+    if (timestamp_ns == 0) {
+      timestamp_ns = static_cast<uint64_t>(this->now().nanoseconds());
+    }
   }
 
   if (metrics_publisher_) {
@@ -207,18 +127,74 @@ void GstVideoBridgeNode::onImage(const sensor_msgs::msg::Image::SharedPtr msg) {
     metrics_publisher_->recordFrameIn(now_ns, timestamp_ns);
   }
 
+  if (config_.runtime.max_fps > 0.0) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto min_period = std::chrono::duration<double>(1.0 / config_.runtime.max_fps);
+    if (last_frame_steady_time_.time_since_epoch().count() != 0 &&
+        (now - last_frame_steady_time_) < min_period) {
+      if (metrics_publisher_) {
+        metrics_publisher_->recordFrameDroppedThrottle();
+      }
+      return;
+    }
+    last_frame_steady_time_ = now;
+  }
+
+  std::string gst_format;
+  if (isBayerEncoding(msg->encoding)) {
+    const std::string bayer_format = resolveGstBayerFormat(msg->encoding);
+    if (!bayer_format.empty() && config_.source.auto_debayer) {
+      if (config_.source.detected_bayer_format != bayer_format) {
+        config_.source.detected_bayer_format = bayer_format;
+        RCLCPP_INFO(this->get_logger(),
+                    "Detected Bayer input '%s'; enabling automatic in-pipeline debayer.",
+                    msg->encoding.c_str());
+        (void)requestPipelineReconfigure("automatic Bayer debayer enabled for input encoding '" +
+                                         msg->encoding + "'");
+        return;
+      }
+      gst_format = bayer_format;
+    }
+  }
+
+  if (gst_format.empty() && !resolveGstFormat(msg->encoding, gst_format)) {
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 5000,
+        "Unsupported image encoding '%s'. Supported encodings include mono8/mono16, rgb8/bgr8, "
+        "rgba8/bgra8, type_8/16 C1/C3/C4, and bayer_*8/*16 (grayscale fallback).",
+        msg->encoding.c_str());
+    return;
+  }
+
+  if (isBayerEncoding(msg->encoding) && config_.source.detected_bayer_format.empty()) {
+    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 10000,
+                         "Input encoding '%s' is being streamed as grayscale Bayer fallback. "
+                         "Automatic in-pipeline debayer is only available for 8-bit Bayer.",
+                         msg->encoding.c_str());
+  }
+
+  const auto push_begin = std::chrono::steady_clock::now();
   const bool pushed =
       stream_engine_->pushFrame(msg->data.data(), msg->data.size(), static_cast<int>(msg->width),
                                 static_cast<int>(msg->height), gst_format, timestamp_ns);
+  const auto push_end = std::chrono::steady_clock::now();
+  const double push_latency_ms =
+      std::chrono::duration<double, std::milli>(push_end - push_begin).count();
+
+  if (metrics_publisher_) {
+    metrics_publisher_->recordPushLatency(push_latency_ms);
+  }
 
   if (!pushed) {
     if (metrics_publisher_) {
-      metrics_publisher_->recordFrameDropped();
+      metrics_publisher_->recordFrameDroppedBackpressure();
     }
-    scheduleReconnect(stream_engine_->lastError());
+    const auto error = stream_engine_->lastError();
+    if (!isBackpressureOnlyError(error)) {
+      scheduleReconnect(error);
+    }
     RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                         "Failed to push frame to GStreamer: %s",
-                         stream_engine_->lastError().c_str());
+                         "Failed to push frame to GStreamer: %s", error.c_str());
   } else if (metrics_publisher_) {
     metrics_publisher_->recordFrameOut();
     consecutive_stream_failures_ = 0;

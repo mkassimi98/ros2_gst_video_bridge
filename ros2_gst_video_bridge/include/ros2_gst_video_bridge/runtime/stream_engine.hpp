@@ -31,11 +31,11 @@ public:
 
 private:
   bool setAppSrcCaps(int width, int height, const std::string& gst_format);
+  bool isAppSrcQueueFull();
   void processBusMessages(GstClockTime timeout);
   void busLoop(std::stop_token stop_token);
 
   std::string pipeline_;
-  std::string last_error_;
   GstElement* pipeline_element_{nullptr};
   GstElement* appsrc_{nullptr};
   GstBus* bus_{nullptr};
@@ -44,9 +44,13 @@ private:
   int caps_height_{0};
   std::string caps_format_;
 
+  std::string last_error_;
+
   std::atomic_bool running_{false};
   bool gst_initialized_{false};
   std::jthread bus_thread_;
+  // mutex_ serialises all access to GStreamer element pointers, caps state, and last_error_.
+  // busLoop polls with timeout=0 so it never holds the lock for more than a few µs.
   mutable std::mutex mutex_;
 };
 

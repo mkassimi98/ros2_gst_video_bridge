@@ -2,6 +2,7 @@
 build/
 install/
 log/
+*.stale.*/
 
 # Python
 __pycache__/
@@ -21,5 +22,8 @@ compile_commands.json
 *.swp
 *~
 
-# Local planning
+# Local planning scratch files — never commit
 TODO.md
+TODO2.md
+TODO*.md
+TODO.local.md

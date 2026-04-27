@@ -1,8 +1,13 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <workspace> [duration_sec] [profile_machine] [profile_stream] [input_topic] [sink_uri]" >&2
+  exit 2
+fi
+
 source /opt/ros/humble/setup.zsh
-source "${1:-/home/ccu-001/ws_dev}/install/setup.zsh"
+source "$1/install/setup.zsh"
 
 duration_sec="${2:-1800}"
 profile_machine="${3:-generic}"

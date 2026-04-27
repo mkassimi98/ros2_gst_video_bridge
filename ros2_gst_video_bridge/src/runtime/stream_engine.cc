@@ -11,6 +11,17 @@
 
 namespace ros2_gst_video_bridge {
 
+namespace {
+
+constexpr guint64 kMaxAppSrcQueuedBuffers = 2;
+
+bool isBayerCapsFormat(const std::string& gst_format) {
+  return gst_format == "rggb" || gst_format == "bggr" || gst_format == "gbrg" ||
+         gst_format == "grbg";
+}
+
+} // namespace
+
 StreamEngine::StreamEngine(std::string pipeline) : pipeline_(std::move(pipeline)) {}
 
 StreamEngine::~StreamEngine() {
@@ -55,7 +66,10 @@ bool StreamEngine::start() {
 
   bus_ = gst_element_get_bus(pipeline_element_);
   gst_app_src_set_stream_type(GST_APP_SRC(appsrc_), GST_APP_STREAM_TYPE_STREAM);
-  g_object_set(G_OBJECT(appsrc_), "is-live", TRUE, "format", GST_FORMAT_TIME, nullptr);
+  g_object_set(G_OBJECT(appsrc_), "is-live", TRUE, "format", GST_FORMAT_TIME, "block", FALSE,
+               "emit-signals", FALSE, "max-buffers", kMaxAppSrcQueuedBuffers, "max-bytes",
+               static_cast<guint64>(0), "max-time", static_cast<guint64>(0), "leaky-type",
+               GST_APP_LEAKY_TYPE_UPSTREAM, nullptr);
 
   const GstStateChangeReturn state_ret =
       gst_element_set_state(pipeline_element_, GST_STATE_PLAYING);
@@ -133,6 +147,11 @@ bool StreamEngine::pushFrame(const uint8_t* data, size_t size, int width, int he
     return false;
   }
 
+  if (isAppSrcQueueFull()) {
+    last_error_ = "appsrc queue full; dropping newest frame";
+    return false;
+  }
+
   GstBuffer* buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
   if (buffer == nullptr) {
     last_error_ = "Failed to allocate GstBuffer.";
@@ -179,9 +198,16 @@ bool StreamEngine::setAppSrcCaps(int width, int height, const std::string& gst_f
     return true;
   }
 
-  GstCaps* caps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, gst_format.c_str(),
-                                      "width", G_TYPE_INT, width, "height", G_TYPE_INT, height,
-                                      "framerate", GST_TYPE_FRACTION, 0, 1, nullptr);
+  GstCaps* caps = nullptr;
+  if (isBayerCapsFormat(gst_format)) {
+    caps = gst_caps_new_simple("video/x-bayer", "format", G_TYPE_STRING, gst_format.c_str(),
+                               "width", G_TYPE_INT, width, "height", G_TYPE_INT, height,
+                               "framerate", GST_TYPE_FRACTION, 0, 1, nullptr);
+  } else {
+    caps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, gst_format.c_str(),
+                               "width", G_TYPE_INT, width, "height", G_TYPE_INT, height,
+                               "framerate", GST_TYPE_FRACTION, 0, 1, nullptr);
+  }
 
   if (caps == nullptr) {
     last_error_ = "Failed to create GstCaps for appsrc.";
@@ -195,6 +221,16 @@ bool StreamEngine::setAppSrcCaps(int width, int height, const std::string& gst_f
   caps_height_ = height;
   caps_format_ = gst_format;
   return true;
+}
+
+bool StreamEngine::isAppSrcQueueFull() {
+  if (appsrc_ == nullptr) {
+    return false;
+  }
+
+  guint64 queued_buffers = 0;
+  g_object_get(G_OBJECT(appsrc_), "current-level-buffers", &queued_buffers, nullptr);
+  return queued_buffers >= kMaxAppSrcQueuedBuffers;
 }
 
 void StreamEngine::processBusMessages(GstClockTime timeout) {
@@ -235,11 +271,13 @@ void StreamEngine::processBusMessages(GstClockTime timeout) {
 void StreamEngine::busLoop(std::stop_token stop_token) {
   using namespace std::chrono_literals;
 
+  // Poll with timeout=0 (non-blocking) so we never hold mutex_ for more than a
+  // few microseconds. Errors are detected within one sleep interval (~10 ms).
   while (!stop_token.stop_requested()) {
     {
       std::lock_guard<std::mutex> lock(mutex_);
       if (running_.load() && bus_ != nullptr) {
-        processBusMessages(100 * GST_MSECOND);
+        processBusMessages(0);
       }
     }
     std::this_thread::sleep_for(10ms);

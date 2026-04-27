@@ -64,6 +64,7 @@ add_executable(gst_video_bridge_node
   src/core/pipeline_builder.cc
   src/runtime/capability_probe.cc
   src/runtime/topic_introspector.cc
+  src/runtime/image_format.cc
   src/runtime/stream_engine.cc
   src/runtime/metrics_publisher.cc
 )
@@ -98,12 +99,36 @@ install(DIRECTORY launch config
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
 
-  ament_add_gtest(test_config_loader test/test_config_loader.cpp src/core/config_loader.cc)
+  ament_add_gtest(test_config_loader test/test_config_loader.cc src/core/config_loader.cc)
   target_include_directories(test_config_loader PRIVATE include)
   ament_target_dependencies(test_config_loader rclcpp)
 
-  ament_add_gtest(test_pipeline_builder test/test_pipeline_builder.cpp src/core/pipeline_builder.cc)
+  ament_add_gtest(test_pipeline_builder test/test_pipeline_builder.cc src/core/pipeline_builder.cc)
   target_include_directories(test_pipeline_builder PRIVATE include)
+
+  ament_add_gtest(test_image_format test/test_image_format.cc src/runtime/image_format.cc)
+  target_include_directories(test_image_format PRIVATE include)
+  ament_target_dependencies(test_image_format sensor_msgs)
+
+  ament_add_gtest(test_stream_engine test/test_stream_engine.cc src/runtime/stream_engine.cc)
+  target_include_directories(test_stream_engine PRIVATE include ${GSTREAMER_INCLUDE_DIRS})
+  target_link_libraries(test_stream_engine ${GSTREAMER_LIBRARIES})
+  target_compile_options(test_stream_engine PRIVATE ${GSTREAMER_CFLAGS_OTHER})
+
+  # Internal detail/ header-only utilities: adaptation math, encoder selection, string helpers.
+  ament_add_gtest(test_detail_utils test/test_detail_utils.cc)
+  target_include_directories(test_detail_utils PRIVATE include)
+
+  # Preflight resilience policy for sink and encoder fallback decisions.
+  ament_add_gtest(test_preflight_policy test/test_preflight_policy.cc)
+  target_include_directories(test_preflight_policy PRIVATE include)
+
+  # MetricsPublisher public API: counter recording and RuntimeStatus publication.
+  ament_add_gtest(test_metrics_publisher
+    test/test_metrics_publisher.cc
+    src/runtime/metrics_publisher.cc)
+  target_include_directories(test_metrics_publisher PRIVATE include)
+  ament_target_dependencies(test_metrics_publisher rclcpp ros2_gst_video_bridge_msgs std_msgs)
 
   add_test(
     NAME smoke_runtime_validate_config

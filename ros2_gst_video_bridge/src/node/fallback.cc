@@ -4,50 +4,14 @@
 #include "ros2_gst_video_bridge/gst_video_bridge_node.hpp"
 
 #include "ros2_gst_video_bridge/core/pipeline_builder.hpp"
-
-#include <string_view>
+#include "ros2_gst_video_bridge/detail/encoder_selection.hpp"
 
 namespace ros2_gst_video_bridge {
 
-namespace {
-
-bool startsWith(const std::string& value, const std::string_view prefix) {
-  return value.rfind(std::string(prefix), 0) == 0;
-}
-
-std::string extractElementName(const std::string& implementation) {
-  const auto arrow = implementation.find(" -> ");
-  if (arrow == std::string::npos) {
-    return "";
-  }
-
-  const auto name_start = arrow + 4;
-  const auto bracket = implementation.find(" [", name_start);
-  if (bracket == std::string::npos || bracket <= name_start) {
-    return "";
-  }
-
-  return implementation.substr(name_start, bracket - name_start);
-}
-
-} // namespace
+namespace {} // namespace
 
 std::string GstVideoBridgeNode::selectSoftwareEncoderForCodec() const {
-  const std::string prefix = config_.codec.name + " -> ";
-  for (const auto& implementation : encoder_implementations_) {
-    if (!startsWith(implementation, prefix)) {
-      continue;
-    }
-    if (implementation.find("[sw]") == std::string::npos) {
-      continue;
-    }
-
-    const std::string encoder = extractElementName(implementation);
-    if (!encoder.empty()) {
-      return encoder;
-    }
-  }
-  return "";
+  return detail::selectSoftwareEncoderForCodec(config_.codec.name, encoder_implementations_);
 }
 
 bool GstVideoBridgeNode::requestSoftwareFallback(const std::string& reason) {

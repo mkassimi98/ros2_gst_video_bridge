@@ -13,6 +13,7 @@ def generate_launch_description():
     debayer_output_topic = LaunchConfiguration('debayer_output_topic')
     sink_uri = LaunchConfiguration('sink_uri')
     codec_name = LaunchConfiguration('codec_name')
+    runtime_mode = LaunchConfiguration('runtime_mode')
     bridge_input_topic = PythonExpression([
         "'", debayer_output_topic, "' if '", enable_debayer,
         "' == 'true' else '", input_topic, "'",
@@ -55,7 +56,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'codec_name',
             default_value='auto',
-            description='Codec selection: auto|h264|h265|mjpeg',
+            description='Codec selection: auto|av1|h265|h264|mjpeg',
+        ),
+        DeclareLaunchArgument(
+            'runtime_mode',
+            default_value='stream',
+            description='Runtime mode: stream|list_topics|list_capabilities|validate_config|discover',
         ),
         Node(
             package='image_proc',
@@ -79,7 +85,7 @@ def generate_launch_description():
                 'input_topic': bridge_input_topic,
                 'codec.name': codec_name,
                 'transport.sink_uri': sink_uri,
-                'runtime.mode': 'stream',
+                'runtime.mode': runtime_mode,
             }],
         ),
     ])

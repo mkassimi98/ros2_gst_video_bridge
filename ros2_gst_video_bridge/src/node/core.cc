@@ -5,16 +5,13 @@
 
 #include "ros2_gst_video_bridge/core/config_loader.hpp"
 #include "ros2_gst_video_bridge/core/pipeline_builder.hpp"
+#include "ros2_gst_video_bridge/detail/preflight_policy.hpp"
+#include "ros2_gst_video_bridge/detail/string_utils.hpp"
 
-#include <string_view>
 #include <utility>
 #include <vector>
 namespace ros2_gst_video_bridge {
 namespace {
-
-bool startsWith(const std::string& value, const std::string_view prefix) {
-  return value.rfind(std::string(prefix), 0) == 0;
-}
 
 std::string valueOf(const std::vector<std::string>& entries, const std::string& key) {
   for (const auto& entry : entries) {
@@ -47,7 +44,7 @@ std::string detectMachineProfile(const std::string& configured_machine,
     return "x86";
   }
 
-  if (runtime_arch == "aarch64" || startsWith(runtime_arch, "arm")) {
+  if (runtime_arch == "aarch64" || detail::startsWith(runtime_arch, "arm")) {
     return "raspi";
   }
 
@@ -55,22 +52,41 @@ std::string detectMachineProfile(const std::string& configured_machine,
 }
 
 std::string extractElementName(const std::string& implementation) {
-  const auto arrow = implementation.find(" -> ");
-  if (arrow == std::string::npos) {
-    return "";
-  }
-
-  const auto name_start = arrow + 4;
-  const auto bracket = implementation.find(" [", name_start);
-  if (bracket == std::string::npos || bracket <= name_start) {
-    return "";
-  }
-
-  return implementation.substr(name_start, bracket - name_start);
+  return detail::extractElementName(implementation);
 }
 
 bool isHardwareImplementation(const std::string& implementation) {
   return implementation.find("[hw:") != std::string::npos;
+}
+
+std::string defaultSinkUriForTransport(const std::string& transport) {
+  if (transport == "udp") {
+    return "udp://127.0.0.1:5000";
+  }
+  if (transport == "rtsp") {
+    return "rtsp://127.0.0.1:8554/stream";
+  }
+  if (transport == "file") {
+    return "/tmp/ros2_gst_video_bridge.ts";
+  }
+  return "srt://127.0.0.1:9000?mode=listener";
+}
+
+bool sinkUriMatchesTransport(const std::string& transport, const std::string& sink_uri) {
+  if (transport == "srt") {
+    return detail::startsWith(sink_uri, "srt://");
+  }
+  if (transport == "udp") {
+    return detail::startsWith(sink_uri, "udp://");
+  }
+  if (transport == "rtsp") {
+    return detail::startsWith(sink_uri, "rtsp://");
+  }
+  if (transport == "file") {
+    return !detail::startsWith(sink_uri, "srt://") && !detail::startsWith(sink_uri, "udp://") &&
+           !detail::startsWith(sink_uri, "rtsp://");
+  }
+  return false;
 }
 
 int implementationScore(const std::string& machine, const std::string& impl) {
@@ -78,6 +94,7 @@ int implementationScore(const std::string& machine, const std::string& impl) {
   const bool is_nv_v4l2 = impl.find("[hw:nvidia-v4l2]") != std::string::npos;
   const bool is_nv = impl.find("[hw:nvidia]") != std::string::npos;
   const bool is_vaapi = impl.find("[hw:vaapi]") != std::string::npos;
+  const bool is_qsv = impl.find("[hw:qsv]") != std::string::npos;
   const bool is_v4l2 = impl.find("[hw:v4l2]") != std::string::npos;
   const bool is_omx = impl.find("[hw:omx]") != std::string::npos;
 
@@ -100,6 +117,9 @@ int implementationScore(const std::string& machine, const std::string& impl) {
   if (machine == "x86") {
     if (is_vaapi) {
       return hw_base + 30;
+    }
+    if (is_qsv) {
+      return hw_base + 28;
     }
     if (is_v4l2) {
       return hw_base + 20;
@@ -126,6 +146,9 @@ int implementationScore(const std::string& machine, const std::string& impl) {
   if (is_vaapi) {
     return hw_base + 25;
   }
+  if (is_qsv) {
+    return hw_base + 22;
+  }
   if (is_v4l2) {
     return hw_base + 20;
   }
@@ -141,34 +164,33 @@ int implementationScore(const std::string& machine, const std::string& impl) {
 std::string selectAutoCodec(const std::string& machine,
                             const std::vector<std::string>& implementations, std::string& reason) {
   const std::vector<std::pair<std::string, int>> codec_priority{
-      {"h264", 3}, {"h265", 2}, {"mjpeg", 1}};
-
-  int best_score = -1;
-  int best_priority = -1;
-  std::string best_codec = "h264";
-  std::string best_impl = "fallback";
+      {"av1", 4}, {"h265", 3}, {"h264", 2}, {"mjpeg", 1}};
 
   for (const auto& codec_item : codec_priority) {
     const std::string& codec = codec_item.first;
-    const int priority = codec_item.second;
+    int best_score_for_codec = -1;
+    std::string best_impl_for_codec;
 
     for (const auto& impl : implementations) {
-      if (!startsWith(impl, codec + " -> ")) {
+      if (!detail::startsWith(impl, codec + " -> ")) {
         continue;
       }
 
       const int score = implementationScore(machine, impl);
-      if (score > best_score || (score == best_score && priority > best_priority)) {
-        best_score = score;
-        best_priority = priority;
-        best_codec = codec;
-        best_impl = impl;
+      if (score > best_score_for_codec) {
+        best_score_for_codec = score;
+        best_impl_for_codec = impl;
       }
+    }
+
+    if (!best_impl_for_codec.empty()) {
+      reason = best_impl_for_codec;
+      return codec;
     }
   }
 
-  reason = best_impl;
-  return best_codec;
+  reason = "fallback";
+  return "h265";
 }
 
 } // namespace
@@ -220,9 +242,26 @@ GstVideoBridgeNode::GstVideoBridgeNode(const rclcpp::NodeOptions& options)
   }
 
   auto_codec_requested_ = config_.codec.name == "auto";
+  encoder_implementations_ = capability_probe_->detectEncoderImplementations();
+
+  const auto available_sinks = capability_probe_->detectSinks();
+  const auto transport_preflight =
+      detail::resolveTransportForAvailableSinks(config_.transport.kind, available_sinks);
+  if (transport_preflight.fallback_applied) {
+    RCLCPP_WARN(this->get_logger(), "%s", transport_preflight.reason.c_str());
+    publishRuntimeEvent("warning", "TRANSPORT_FALLBACK", transport_preflight.reason);
+    config_.transport.kind = transport_preflight.effective_transport;
+  }
+  if (!sinkUriMatchesTransport(config_.transport.kind, config_.transport.sink_uri)) {
+    const std::string old_uri = config_.transport.sink_uri;
+    config_.transport.sink_uri = defaultSinkUriForTransport(config_.transport.kind);
+    RCLCPP_WARN(this->get_logger(),
+                "transport.sink_uri '%s' incompatible with transport.kind='%s'. Using '%s'.",
+                old_uri.c_str(), config_.transport.kind.c_str(),
+                config_.transport.sink_uri.c_str());
+  }
 
   if (config_.codec.name == "auto") {
-    encoder_implementations_ = capability_probe_->detectEncoderImplementations();
     std::string selection_reason;
     const std::string selected_codec =
         selectAutoCodec(machine_for_auto, encoder_implementations_, selection_reason);
@@ -237,6 +276,16 @@ GstVideoBridgeNode::GstVideoBridgeNode(const rclcpp::NodeOptions& options)
         machine_for_auto.c_str());
   } else {
     hw_encoder_selected_ = false;
+
+    const auto encoder_preflight = detail::resolveEncoderOverride(
+        config_.codec.name, config_.codec.encoder, encoder_implementations_);
+    if (encoder_preflight.fallback_applied) {
+      RCLCPP_WARN(this->get_logger(), "%s", encoder_preflight.reason.c_str());
+      publishRuntimeEvent("warning", "ENCODER_PREFLIGHT_FALLBACK", encoder_preflight.reason);
+      config_.codec.encoder = encoder_preflight.effective_encoder;
+    } else if (!encoder_preflight.effective_encoder.empty()) {
+      config_.codec.encoder = encoder_preflight.effective_encoder;
+    }
   }
 
   effective_pipeline_ = PipelineBuilder::build(config_);

@@ -7,39 +7,76 @@ Generic ROS 2 video bridge that subscribes to a raw `sensor_msgs/Image` topic an
 - Keep ROS-side ingestion simple: raw image input, topic name configurable.
 - Be production-friendly for Jetson/edge deployment and GCS streaming.
 
-## Configuration Contract (Phase 2)
+## Parameter Reference
 
-- Profiles (layered defaults):
-	- `profile.machine` (`generic`, `jetson`, `x86`, `raspi`)
-	- `profile.stream` (`default`, `low_latency`, `low_bandwidth`, `high_quality`, `monitoring_udp`)
+All parameters are declared at node startup. Modern namespaced names always take precedence over legacy `gst.*` aliases.
 
-- ROS side (minimal and stable):
-	- `input_topic`
+### Profile (layered defaults)
 
-- Transport parameters:
-	- `transport.kind` (`srt`, `rtsp`, `udp`, `file`)
-	- `transport.sink_uri`
-	- `transport.latency_ms`
-	- `transport.reconnect.enabled`
-	- `transport.reconnect.interval_ms`
-	- `transport.reconnect.max_attempts`
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `profile.machine` | `string` | `generic` | Machine class: `generic`, `jetson`, `x86`, `raspi` |
+| `profile.stream` | `string` | `default` | Stream profile: `default`, `low_latency`, `low_bandwidth`, `high_quality`, `monitoring_udp` |
 
-- Codec parameters:
-	- `codec.name` (`auto`, `h264`, `h265`, `mjpeg`)
-	- `codec.profile`
-	- `codec.tune`
-	- `codec.rate_control`
-	- `codec.bitrate_kbps`
-	- `codec.gop`
+### Source
 
-- Runtime parameters:
-	- `max_fps`
-	- `use_wall_clock_timestamps`
-	- `runtime.mode` (`stream`, `list_topics`, `list_capabilities`, `validate_config`, `discover`)
-	- `runtime.print_effective_config`
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `input_topic` | `string` | `/camera/image_raw` | ROS topic to subscribe to (`sensor_msgs/msg/Image`) |
 
-- Escape hatch:
-	- `gst.pipeline_override` (when set, bypasses preset generation)
+### Transport
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `transport.kind` | `string` | `srt` | Sink type: `srt`, `rtsp`, `udp`, `file` |
+| `transport.sink_uri` | `string` | `srt://127.0.0.1:9000?mode=listener` | Full destination URI for the selected sink |
+| `transport.latency_ms` | `int` | `60` | SRT latency in milliseconds (ignored for non-SRT sinks) |
+| `transport.reconnect.enabled` | `bool` | `true` | Enable automatic reconnect on stream failure |
+| `transport.reconnect.interval_ms` | `int` | `1000` | Minimum time between reconnect attempts (ms) |
+| `transport.reconnect.max_attempts` | `int` | `0` | Maximum reconnect attempts; `0` = unlimited |
+
+Legacy aliases (still accepted, overridden by namespaced forms): `gst.transport`, `gst.sink_uri`, `gst.latency_ms`.
+
+### Codec
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `codec.name` | `string` | `auto` | Codec: `auto`, `av1`, `h265`, `h264`, `mjpeg` (`auto` prefers codec order `av1` -> `h265` -> `h264`, then MJPEG fallback) |
+| `codec.encoder` | `string` | `` | Override specific GStreamer encoder element (e.g. `nvv4l2av1enc`, `nvv4l2h265enc`, `x264enc`); empty = auto-select |
+| `codec.profile` | `string` | `baseline` | H.264/H.265 profile where supported by the selected encoder |
+| `codec.tune` | `string` | `zerolatency` | x264enc/x265enc tune string |
+| `codec.rate_control` | `string` | `cbr` | Rate control mode: `cbr`, `vbr` |
+| `codec.bitrate_kbps` | `int` | `2000` | Target bitrate in kbps |
+| `codec.gop` | `int` | `30` | Keyframe interval (frames) |
+
+Legacy aliases: `gst.codec`, `gst.profile`, `gst.bitrate_kbps`.
+
+### Runtime
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `max_fps` | `double` | `30.0` | Maximum frames per second forwarded to GStreamer |
+| `use_wall_clock_timestamps` | `bool` | `false` | Use node wall-clock instead of image header stamp for PTS |
+| `runtime.mode` | `string` | `stream` | Operating mode: `stream`, `list_topics`, `list_capabilities`, `validate_config`, `discover` |
+| `runtime.print_effective_config` | `bool` | `true` | Log the effective configuration at startup |
+| `runtime.stream_id` | `string` | `default` | Stream identifier included in status/event messages |
+| `runtime.hw_fallback_failures` | `int` | `3` | Consecutive failures before switching HW encoder to SW fallback |
+
+### Adaptive Resilience
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `runtime.adaptation.enabled` | `bool` | `true` | Enable automatic bitrate/fps/gop adaptation on degraded state |
+| `runtime.adaptation.profile` | `string` | `balanced` | Adaptation aggressiveness: `conservative`, `balanced`, `aggressive` |
+| `runtime.adaptation.interval_ms` | `int` | `2000` | Minimum interval between adaptation steps (ms) |
+| `runtime.adaptation.cooldown_ms` | `int` | `5000` | Cooldown before recovering quality back up (ms) |
+
+### Escape Hatch
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `gst.pipeline_override` | `string` | `` | Full GStreamer pipeline string; bypasses all preset generation when non-empty |
+
 
 ## Repository Structure
 
@@ -67,19 +104,35 @@ ros2_gst_video_bridge/
 
 ## Build
 
+Install common dependencies on Ubuntu 22.04 / ROS 2 Humble:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  gstreamer1.0-tools \
+  gstreamer1.0-plugins-base \
+  gstreamer1.0-plugins-good \
+  gstreamer1.0-plugins-bad \
+  gstreamer1.0-libav \
+  libgstreamer1.0-dev \
+  libgstreamer-plugins-base1.0-dev
+```
+
 Clone into a ROS 2 workspace and build both packages:
 
 ```bash
-mkdir -p ~/ws_dev/src
-cd ~/ws_dev/src
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
 git clone <repo-url> ros2_gst_video_bridge
 cd ..
+rosdep install --from-paths src --ignore-src -r -y
 colcon build --packages-up-to ros2_gst_video_bridge
 source install/setup.bash
 ```
 
 ```bash
 cd <your_ws>
+rosdep install --from-paths src --ignore-src -r -y
 colcon build --packages-up-to ros2_gst_video_bridge
 source install/setup.bash
 ```
@@ -89,6 +142,21 @@ source install/setup.bash
 ```bash
 ros2 launch ros2_gst_video_bridge gst_video_bridge.launch.py
 ```
+
+## Supported ROS Distributions
+
+| ROS distribution | Status |
+|---|---|
+| Humble | Tested on Ubuntu 22.04 / Jetson |
+| Iron/Jazzy/Rolling | Not validated yet |
+
+## Known-Good Platform Matrix
+
+| Host | Camera | Input | Output | Status |
+|---|---|---|---|---|
+| Jetson / aarch64, Linux 5.15.148-tegra | Basler acA2440-35uc USB3 | 1920x1200 BayerRG8 at about 30 Hz | H.264 MPEG-TS file sink | Tested |
+
+See `docs/PLATFORM_MATRIX.md` for details.
 
 ## End-to-End Basler USB Test (SRT Listener -> Caller)
 
@@ -114,7 +182,8 @@ Reconnect the USB camera (or reboot) after applying the rule.
 ### 1) Verify camera detection
 
 ```bash
-cd /home/ccu-001/ws_dev
+export WS=<your_ros2_workspace>
+cd "$WS"
 source /opt/ros/humble/setup.zsh
 source install/setup.zsh
 
@@ -124,22 +193,26 @@ ros2 run camera_aravis2 camera_finder
 ### 2) Launch camera node (Terminal A)
 
 ```bash
+export WS=<your_ros2_workspace>
 source /opt/ros/humble/setup.zsh
-source /home/ccu-001/ws_dev/install/setup.zsh
+source "$WS/install/setup.zsh"
 ros2 launch camera_aravis2 camera_driver_uv_example.launch.py guid:=Basler-2676016350B6-23285942
 ```
 
 ### 3) Launch bridge node in SRT listener mode (Terminal B)
 
 ```bash
+export WS=<your_ros2_workspace>
 source /opt/ros/humble/setup.zsh
-source /home/ccu-001/ws_dev/install/setup.zsh
+source "$WS/install/setup.zsh"
 ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
 	input_topic:=/camera_driver_uv_example/vis/image_raw \
 	"sink_uri:=srt://0.0.0.0:9000?mode=listener"
 ```
 
-For Bayer cameras, enable optional debayer (color output before bridge):
+For 8-bit Bayer cameras, the bridge now enables in-pipeline debayer automatically on first frame.
+If you prefer an explicit ROS-side color topic, or if your camera publishes 16-bit Bayer, you can
+still enable optional debayer before the bridge:
 
 ```bash
 ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
@@ -160,16 +233,18 @@ gst-launch-1.0 -v srtsrc uri="srt://1.0.0.22:9000?mode=caller" latency=60 ! tsde
 Check that the camera topic is publishing:
 
 ```bash
+export WS=<your_ros2_workspace>
 source /opt/ros/humble/setup.zsh
-source /home/ccu-001/ws_dev/install/setup.zsh
+source "$WS/install/setup.zsh"
 ros2 topic hz /camera_driver_uv_example/vis/image_raw
 ```
 
 Check bridge runtime metrics:
 
 ```bash
+export WS=<your_ros2_workspace>
 source /opt/ros/humble/setup.zsh
-source /home/ccu-001/ws_dev/install/setup.zsh
+source "$WS/install/setup.zsh"
 ros2 topic echo /gst_video_bridge/runtime_metrics --once
 ```
 
@@ -220,9 +295,10 @@ Fields include:
 
 - state (`connecting|streaming|degraded|reconnecting|failed`)
 - `fps_in`, `fps_out`
-- dropped frame counters
+- dropped frame counters split by throttle, malformed input, and downstream backpressure
 - reconnect counter
 - latency estimate in milliseconds
+- appsrc push latency estimate and observed max
 - selected codec/encoder and fallback flags
 - adaptation profile and current adaptation level
 
@@ -242,16 +318,17 @@ First-failure snapshot:
 When `codec.name` is set to `auto`, the node inspects available encoder implementations via
 `gst-inspect-1.0` and resolves to the best codec for the selected machine profile.
 
-Selection order by machine profile:
+Selection order:
+
+1. Codec priority: `av1` -> `h265` -> `h264` -> `mjpeg`.
+2. Within the selected codec, machine-specific implementation preference:
 
 | Machine profile | Preferred implementation classes |
 |---|---|
 | `jetson` | `hw:nvidia-v4l2` -> `hw:nvidia` -> other HW (`v4l2`/`omx`/`vaapi`) -> `sw` |
-| `x86` | `hw:vaapi` -> `hw:v4l2` -> NVIDIA HW -> `sw` |
+| `x86` | `hw:vaapi` -> `hw:qsv` -> `hw:v4l2` -> NVIDIA HW -> `sw` |
 | `raspi` | `hw:v4l2` -> `hw:omx` -> `sw` |
 | `generic` | `hw:vaapi` -> `hw:v4l2` -> NVIDIA HW -> `hw:omx` -> `sw` |
-
-Codec tie-break preference is stable: `h264` -> `h265` -> `mjpeg`.
 
 If `codec.name:=auto` picks a hardware encoder and runtime fails repeatedly while streaming,
 the bridge now falls back automatically to a software encoder for the same codec.
@@ -293,10 +370,46 @@ Soak run script:
 <workspace>/src/ros2_gst_video_bridge/ros2_gst_video_bridge/scripts/run_soak_profile.zsh <workspace> 1800 generic low_latency /camera/image_raw
 ```
 
+Reference receiver pipelines:
+
+Note: AV1 over MPEG-TS is specified by AOM, but GStreamer 1.20 `mpegtsmux`/`tsdemux` do not
+advertise `video/x-av1` pads. For AV1 over SRT this bridge uses Matroska; H.264/H.265 keep
+MPEG-TS.
+
+```bash
+# SRT AV1 Matroska receiver
+gst-launch-1.0 -v srtsrc uri="srt://127.0.0.1:9000?mode=caller" latency=60 ! \
+  matroskademux ! av1parse ! avdec_av1 ! videoconvert ! autovideosink sync=false
+
+# SRT H.264 MPEG-TS receiver
+gst-launch-1.0 -v srtsrc uri="srt://127.0.0.1:9000?mode=caller" latency=60 ! \
+  tsdemux ! h264parse ! avdec_h264 ! videoconvert ! autovideosink sync=false
+
+# SRT H.265 MPEG-TS receiver
+gst-launch-1.0 -v srtsrc uri="srt://127.0.0.1:9000?mode=caller" latency=60 ! \
+  tsdemux ! h265parse ! avdec_h265 ! videoconvert ! autovideosink sync=false
+
+# UDP H.264 RTP receiver
+gst-launch-1.0 -v udpsrc port=5000 caps="application/x-rtp,media=video,encoding-name=H264,payload=96" ! \
+  rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! autovideosink sync=false
+
+# UDP AV1 RTP receiver, requires an AV1 RTP depayloader in the local GStreamer install
+gst-launch-1.0 -v udpsrc port=5000 caps="application/x-rtp,media=video,encoding-name=AV1,payload=96" ! \
+  rtpav1depay ! av1parse ! avdec_av1 ! videoconvert ! autovideosink sync=false
+
+# MJPEG over UDP RTP receiver
+gst-launch-1.0 -v udpsrc port=5000 caps="application/x-rtp,media=video,encoding-name=JPEG,payload=26" ! \
+  rtpjpegdepay ! jpegdec ! videoconvert ! autovideosink sync=false
+```
+
 Release/versioning policy documents:
 
 - `docs/VERSIONING.md`
 - `docs/RELEASE.md`
+- `docs/DEPENDENCIES.md`
+- `docs/TROUBLESHOOTING.md`
+- `docs/PLATFORM_MATRIX.md`
+- `docs/CONTROL_PLANE.md`
 
 Example:
 

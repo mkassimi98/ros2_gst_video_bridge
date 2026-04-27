@@ -30,7 +30,10 @@ public:
   void publishHeartbeat();
   void recordFrameIn(uint64_t now_ns, uint64_t source_timestamp_ns);
   void recordFrameOut();
-  void recordFrameDropped();
+  void recordFrameDroppedBackpressure();
+  void recordFrameDroppedMalformed();
+  void recordFrameDroppedThrottle();
+  void recordPushLatency(double latency_ms);
   void recordReconnect();
   void updateRuntimeState(const std::string& runtime_state);
   void publishEvent(const std::string& severity, const std::string& code,
@@ -39,8 +42,8 @@ public:
 private:
   ros2_gst_video_bridge_msgs::msg::RuntimeStatus buildStatusSnapshot(uint64_t now_ns,
                                                                      double elapsed_s);
-  std::string buildLegacyPayload(const ros2_gst_video_bridge_msgs::msg::RuntimeStatus& status,
-                                 uint64_t drops_since_last) const;
+  static std::string buildLegacyPayload(
+      const ros2_gst_video_bridge_msgs::msg::RuntimeStatus& status, uint64_t drops_since_last);
   void publishSnapshot();
 
   rclcpp::Node& node_;
@@ -51,7 +54,9 @@ private:
 
   std::atomic<uint64_t> frames_in_{0};
   std::atomic<uint64_t> frames_out_{0};
-  std::atomic<uint64_t> frames_dropped_{0};
+  std::atomic<uint64_t> frames_dropped_backpressure_{0};
+  std::atomic<uint64_t> frames_dropped_malformed_{0};
+  std::atomic<uint64_t> frames_dropped_throttle_{0};
   std::atomic<uint64_t> reconnect_count_{0};
 
   uint64_t last_frames_in_{0};
@@ -59,6 +64,8 @@ private:
   uint64_t last_frames_dropped_{0};
   uint64_t last_publish_time_ns_{0};
   std::atomic<double> latency_estimate_ms_{0.0};
+  std::atomic<double> push_latency_estimate_ms_{0.0};
+  std::atomic<double> push_latency_max_ms_{0.0};
   std::string runtime_state_{"connecting"};
 
   std::string session_id_;

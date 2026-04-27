@@ -11,8 +11,13 @@ float32 fps_in
 float32 fps_out
 uint64 dropped_total
 uint64 dropped_since_last
+uint64 dropped_throttle_total
+uint64 dropped_malformed_total
+uint64 dropped_backpressure_total
 uint64 reconnect_count
 float32 latency_estimate_ms
+float32 push_latency_estimate_ms
+float32 push_latency_max_ms
 float32 max_fps_effective
 uint32 bitrate_kbps_effective
 uint32 gop_effective

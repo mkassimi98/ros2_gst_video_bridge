@@ -10,12 +10,14 @@
 namespace ros2_gst_video_bridge {
 
 MetricsPublisher::MetricsPublisher(rclcpp::Node& node) : node_(node) {
-  metrics_pub_ = node_.create_publisher<std_msgs::msg::String>("~/runtime_metrics",
-                                                               rclcpp::SystemDefaultsQoS());
+  const auto status_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().durability_volatile();
+  const auto event_qos = rclcpp::QoS(rclcpp::KeepLast(50)).reliable().durability_volatile();
+
+  metrics_pub_ = node_.create_publisher<std_msgs::msg::String>("~/runtime_metrics", status_qos);
   status_pub_ = node_.create_publisher<ros2_gst_video_bridge_msgs::msg::RuntimeStatus>(
-      "~/runtime_status", rclcpp::SystemDefaultsQoS());
+      "~/runtime_status", status_qos);
   event_pub_ = node_.create_publisher<ros2_gst_video_bridge_msgs::msg::RuntimeEvent>(
-      "~/runtime_events", rclcpp::SystemDefaultsQoS());
+      "~/runtime_events", event_qos);
 
   last_publish_time_ns_ = static_cast<uint64_t>(node_.now().nanoseconds());
   publish_timer_ =
@@ -82,8 +84,33 @@ void MetricsPublisher::recordFrameOut() {
   frames_out_.fetch_add(1, std::memory_order_relaxed);
 }
 
-void MetricsPublisher::recordFrameDropped() {
-  frames_dropped_.fetch_add(1, std::memory_order_relaxed);
+void MetricsPublisher::recordFrameDroppedBackpressure() {
+  frames_dropped_backpressure_.fetch_add(1, std::memory_order_relaxed);
+}
+
+void MetricsPublisher::recordFrameDroppedMalformed() {
+  frames_dropped_malformed_.fetch_add(1, std::memory_order_relaxed);
+}
+
+void MetricsPublisher::recordFrameDroppedThrottle() {
+  frames_dropped_throttle_.fetch_add(1, std::memory_order_relaxed);
+}
+
+void MetricsPublisher::recordPushLatency(double latency_ms) {
+  if (!std::isfinite(latency_ms) || latency_ms < 0.0) {
+    return;
+  }
+
+  constexpr double alpha = 0.2;
+  const double previous = push_latency_estimate_ms_.load(std::memory_order_relaxed);
+  const double next =
+      previous <= 0.0 ? latency_ms : ((1.0 - alpha) * previous + alpha * latency_ms);
+  push_latency_estimate_ms_.store(next, std::memory_order_relaxed);
+
+  double observed_max = push_latency_max_ms_.load(std::memory_order_relaxed);
+  while (latency_ms > observed_max && !push_latency_max_ms_.compare_exchange_weak(
+                                          observed_max, latency_ms, std::memory_order_relaxed)) {
+  }
 }
 
 void MetricsPublisher::recordReconnect() {
@@ -128,7 +155,10 @@ MetricsPublisher::buildStatusSnapshot(uint64_t now_ns, double elapsed_s) {
 
   const uint64_t in_count = frames_in_.load(std::memory_order_relaxed);
   const uint64_t out_count = frames_out_.load(std::memory_order_relaxed);
-  const uint64_t drop_count = frames_dropped_.load(std::memory_order_relaxed);
+  const uint64_t throttle_drops = frames_dropped_throttle_.load(std::memory_order_relaxed);
+  const uint64_t malformed_drops = frames_dropped_malformed_.load(std::memory_order_relaxed);
+  const uint64_t backpressure_drops = frames_dropped_backpressure_.load(std::memory_order_relaxed);
+  const uint64_t drop_count = throttle_drops + malformed_drops + backpressure_drops;
   const uint64_t reconnects = reconnect_count_.load(std::memory_order_relaxed);
 
   status.fps_in = static_cast<float>(static_cast<double>(in_count - last_frames_in_) / elapsed_s);
@@ -136,9 +166,16 @@ MetricsPublisher::buildStatusSnapshot(uint64_t now_ns, double elapsed_s) {
       static_cast<float>(static_cast<double>(out_count - last_frames_out_) / elapsed_s);
   status.dropped_total = drop_count;
   status.dropped_since_last = drop_count - last_frames_dropped_;
+  status.dropped_throttle_total = throttle_drops;
+  status.dropped_malformed_total = malformed_drops;
+  status.dropped_backpressure_total = backpressure_drops;
   status.reconnect_count = reconnects;
   status.latency_estimate_ms =
       static_cast<float>(latency_estimate_ms_.load(std::memory_order_relaxed));
+  status.push_latency_estimate_ms =
+      static_cast<float>(push_latency_estimate_ms_.load(std::memory_order_relaxed));
+  status.push_latency_max_ms =
+      static_cast<float>(push_latency_max_ms_.load(std::memory_order_relaxed));
   status.max_fps_effective = max_fps_effective_;
   status.bitrate_kbps_effective = bitrate_kbps_effective_;
   status.gop_effective = gop_effective_;
@@ -154,13 +191,18 @@ MetricsPublisher::buildStatusSnapshot(uint64_t now_ns, double elapsed_s) {
 
 std::string
 MetricsPublisher::buildLegacyPayload(const ros2_gst_video_bridge_msgs::msg::RuntimeStatus& status,
-                                     uint64_t drops_since_last) const {
+                                     uint64_t drops_since_last) {
   std::ostringstream payload;
   payload << "state=" << status.state << " fps_in=" << status.fps_in
           << " fps_out=" << status.fps_out << " dropped_total=" << status.dropped_total
           << " dropped_since_last=" << drops_since_last
+          << " dropped_throttle_total=" << status.dropped_throttle_total
+          << " dropped_malformed_total=" << status.dropped_malformed_total
+          << " dropped_backpressure_total=" << status.dropped_backpressure_total
           << " reconnect_count=" << status.reconnect_count
-          << " latency_estimate_ms=" << status.latency_estimate_ms;
+          << " latency_estimate_ms=" << status.latency_estimate_ms
+          << " push_latency_estimate_ms=" << status.push_latency_estimate_ms
+          << " push_latency_max_ms=" << status.push_latency_max_ms;
   return payload.str();
 }
 
@@ -178,7 +220,7 @@ void MetricsPublisher::publishSnapshot() {
 
   last_frames_in_ = frames_in_.load(std::memory_order_relaxed);
   last_frames_out_ = frames_out_.load(std::memory_order_relaxed);
-  last_frames_dropped_ = frames_dropped_.load(std::memory_order_relaxed);
+  last_frames_dropped_ = status.dropped_total;
   last_publish_time_ns_ = now_ns;
 }
 
