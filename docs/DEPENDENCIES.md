@@ -1,5 +1,33 @@
 # Dependencies
 
+<p align="center">
+  <img src="assets/images/logos/ros2.png" alt="ROS 2" height="54" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="assets/images/logos/gstreamer.png" alt="GStreamer" height="54" />
+</p>
+
+## ROS 2 Requirements
+
+Target runtime:
+
+- ROS 2 Humble on Ubuntu 22.04
+
+Environment bootstrap:
+
+```bash
+source /opt/ros/humble/setup.bash
+```
+
+Common ROS packages for this repository:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  ros-humble-ros-base \
+  python3-colcon-common-extensions \
+  python3-rosdep
+```
+
 ## Required Runtime Packages
 
 For Ubuntu 22.04 / ROS 2 Humble:
