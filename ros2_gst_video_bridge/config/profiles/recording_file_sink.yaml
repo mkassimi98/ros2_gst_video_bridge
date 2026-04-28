@@ -1,0 +1,25 @@
+gst_video_bridge:
+  ros__parameters:
+    profile.machine: generic
+    profile.stream: high_quality
+
+    input_topic: /camera/image_raw
+
+    transport.kind: file
+    transport.sink_uri: /tmp/ros2_gst_video_bridge_recording.ts
+    transport.latency_ms: 0
+    transport.reconnect.enabled: false
+    transport.reconnect.interval_ms: 1000
+    transport.reconnect.max_attempts: 0
+
+    codec.name: h264
+    codec.profile: high
+    codec.tune: zerolatency
+    codec.rate_control: cbr
+    codec.bitrate_kbps: 5000
+    codec.gop: 60
+
+    max_fps: 30.0
+    use_wall_clock_timestamps: false
+    runtime.mode: stream
+    runtime.print_effective_config: true
