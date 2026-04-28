@@ -27,6 +27,8 @@ COMMON_ARGUMENTS = {
     'use_wall_clock_timestamps',
     'runtime_mode',
     'print_effective_config',
+    'backpressure_reconnect_after_ms',
+    'backpressure_max_consecutive_drops',
     'stream_id',
     'hw_fallback_failures',
     'adaptation_enabled',

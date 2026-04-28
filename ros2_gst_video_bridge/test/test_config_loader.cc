@@ -60,6 +60,29 @@ TEST_F(ConfigLoaderTest, ValidateAcceptsAutoAndAv1Codecs) {
   EXPECT_TRUE(errors.empty());
 }
 
+TEST_F(ConfigLoaderTest, LoadsBackpressureRecoveryParameters) {
+  rclcpp::NodeOptions options;
+  options.parameter_overrides(std::vector<rclcpp::Parameter>{
+      rclcpp::Parameter("runtime.backpressure.reconnect_after_ms", 1500),
+      rclcpp::Parameter("runtime.backpressure.max_consecutive_drops", 45),
+  });
+
+  auto node = std::make_shared<rclcpp::Node>("config_loader_backpressure_test", options);
+  const auto cfg = ros2_gst_video_bridge::ConfigLoader::loadFromNode(*node);
+
+  EXPECT_EQ(cfg.runtime.backpressure_reconnect_after_ms, 1500);
+  EXPECT_EQ(cfg.runtime.backpressure_max_consecutive_drops, 45);
+}
+
+TEST_F(ConfigLoaderTest, ValidateRejectsInvalidBackpressureRecoveryParameters) {
+  ros2_gst_video_bridge::GstBridgeConfig cfg;
+  cfg.runtime.backpressure_reconnect_after_ms = 0;
+  cfg.runtime.backpressure_max_consecutive_drops = -1;
+
+  const auto errors = ros2_gst_video_bridge::ConfigLoader::validate(cfg);
+  EXPECT_GE(errors.size(), 2U);
+}
+
 TEST_F(ConfigLoaderTest, ModernParametersOverrideBackwardCompatibleAliases) {
   rclcpp::NodeOptions options;
   options.parameter_overrides(std::vector<rclcpp::Parameter>{

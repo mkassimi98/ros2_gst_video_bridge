@@ -59,6 +59,8 @@ Legacy aliases: `gst.codec`, `gst.profile`, `gst.bitrate_kbps`.
 | `use_wall_clock_timestamps` | `bool` | `false` | Use node wall-clock instead of image header stamp for PTS |
 | `runtime.mode` | `string` | `stream` | Operating mode: `stream`, `list_topics`, `list_capabilities`, `validate_config`, `discover` |
 | `runtime.print_effective_config` | `bool` | `true` | Log the effective configuration at startup |
+| `runtime.backpressure.reconnect_after_ms` | `int` | `2000` | Restart the pipeline when `appsrc` backpressure is sustained for this long |
+| `runtime.backpressure.max_consecutive_drops` | `int` | `60` | Restart the pipeline after this many consecutive backpressure drops |
 | `runtime.stream_id` | `string` | `default` | Stream identifier included in status/event messages |
 | `runtime.hw_fallback_failures` | `int` | `3` | Consecutive failures before switching HW encoder to SW fallback |
 

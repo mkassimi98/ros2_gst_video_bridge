@@ -9,18 +9,19 @@
 
 namespace ros2_gst_video_bridge {
 
-class CapabilityProbe {
-public:
-  bool hasGstInspect() const;
-  std::vector<std::string> detectPlugins() const;
-  std::vector<std::string> detectEncoders() const;
-  std::vector<std::string> detectSinks() const;
+class CapabilityProbe
+{
+  public:
+    bool                     hasGstInspect() const;
+    std::vector<std::string> detectPlugins() const;
+    std::vector<std::string> detectEncoders() const;
+    std::vector<std::string> detectSinks() const;
 
-  std::vector<std::string> detectHostProfile() const;
-  std::vector<std::string> detectEncoderImplementations() const;
+    std::vector<std::string> detectHostProfile() const;
+    std::vector<std::string> detectEncoderImplementations() const;
 
-  std::vector<std::string> detectTransports() const;
-  std::vector<std::string> detectCodecs() const;
+    std::vector<std::string> detectTransports() const;
+    std::vector<std::string> detectCodecs() const;
 };
 
 } // namespace ros2_gst_video_bridge

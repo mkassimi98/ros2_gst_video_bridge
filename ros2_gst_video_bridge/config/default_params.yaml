@@ -33,6 +33,8 @@ gst_video_bridge:
     use_wall_clock_timestamps: false
     runtime.mode: stream
     runtime.print_effective_config: true
+    runtime.backpressure.reconnect_after_ms: 2000
+    runtime.backpressure.max_consecutive_drops: 60
     runtime.stream_id: default
     runtime.hw_fallback_failures: 3
     runtime.adaptation.enabled: true

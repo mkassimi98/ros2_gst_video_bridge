@@ -5,18 +5,21 @@
 
 namespace ros2_gst_video_bridge {
 
-GstVideoBridgeNode::~GstVideoBridgeNode() {
-  if (stream_engine_) {
-    stream_engine_->stop();
-  }
+GstVideoBridgeNode::~GstVideoBridgeNode()
+{
+    if (stream_engine_) {
+        stream_engine_->stop();
+    }
 }
 
-bool GstVideoBridgeNode::hasImmediateExit() const {
-  return immediate_exit_code_ >= 0;
+bool GstVideoBridgeNode::hasImmediateExit() const
+{
+    return immediate_exit_code_ >= 0;
 }
 
-int GstVideoBridgeNode::immediateExitCode() const {
-  return immediate_exit_code_;
+int GstVideoBridgeNode::immediateExitCode() const
+{
+    return immediate_exit_code_;
 }
 
 } // namespace ros2_gst_video_bridge

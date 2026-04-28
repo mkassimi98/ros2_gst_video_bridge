@@ -78,6 +78,16 @@ COMMON_ARGUMENTS = (
         'Runtime mode: stream|list_topics|list_capabilities|validate_config|discover',
     ),
     ('print_effective_config', 'true', 'Print the resolved configuration on startup'),
+    (
+        'backpressure_reconnect_after_ms',
+        '2000',
+        'Reconnect when appsrc backpressure lasts this many milliseconds',
+    ),
+    (
+        'backpressure_max_consecutive_drops',
+        '60',
+        'Reconnect after this many consecutive appsrc backpressure drops',
+    ),
     ('stream_id', 'default', 'Logical stream identifier used by runtime state and metrics'),
     ('hw_fallback_failures', '3', 'Hardware encoder failures before falling back to CPU'),
     ('adaptation_enabled', 'true', 'Enable runtime bitrate/fps adaptation (true|false)'),
@@ -164,6 +174,12 @@ def generate_launch_description():
                     'use_wall_clock_timestamps': _bool_param('use_wall_clock_timestamps'),
                     'runtime.mode': _lc('runtime_mode'),
                     'runtime.print_effective_config': _bool_param('print_effective_config'),
+                    'runtime.backpressure.reconnect_after_ms': _int_param(
+                        'backpressure_reconnect_after_ms'
+                    ),
+                    'runtime.backpressure.max_consecutive_drops': _int_param(
+                        'backpressure_max_consecutive_drops'
+                    ),
                     'runtime.stream_id': _lc('stream_id'),
                     'runtime.hw_fallback_failures': _int_param('hw_fallback_failures'),
                     'runtime.adaptation.enabled': _bool_param('adaptation_enabled'),

@@ -5,7 +5,7 @@
 - ROS 2 Humble (Ubuntu 22.04 or Jetson JetPack 5.x)
 - GStreamer 1.20+ with `gstreamer1.0-plugins-{base,good,bad}` and `gstreamer1.0-libav`
 - `libgstreamer1.0-dev` and `libgstreamer-plugins-base1.0-dev`
-- `clang-format-15` and `clang-tidy-15` (optional but required to pass CI)
+- `clang-format-15` (optional but required to pass CI)
 
 ## Development Setup
 
@@ -26,7 +26,6 @@ source install/setup.bash
 # Build with tests enabled (default)
 colcon build --packages-up-to ros2_gst_video_bridge \
   --cmake-args \
-    -DROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_TIDY=OFF \
     -DROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_FORMAT_CHECK=OFF
 
 # Run all tests and show results
@@ -38,7 +37,7 @@ All 11 CTest entries must pass before opening a PR. If you add functionality, ad
 
 ## Code Style
 
-This repository uses `clang-format-15` (LLVM base, 100-column limit, 2-space indent) and `clang-tidy-15`.
+This repository uses `clang-format-15` (LLVM base, 100-column limit, 2-space indent).
 
 **Format check before every commit:**
 

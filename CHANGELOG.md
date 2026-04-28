@@ -78,8 +78,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 **Tooling**
 - `clang-format-15` with `.clang-format` (LLVM style, 100-column limit, C++17).
-- `clang-tidy-15` with `.clang-tidy` (bugprone, performance, readability, modernize, cppcoreguidelines checks).
-- Both tools discovered by versioned binary names in `CMakeLists.txt`; build continues gracefully if not found.
+- `clang-format` discovered by versioned binary names in `CMakeLists.txt`; build continues gracefully if not found.
 - CI (`build-and-test` + `nightly-matrix`) on Ubuntu 22.04 / ROS 2 Humble.
 - CI `clang-format-check` job runs `--dry-run --Werror` on all headers and sources.
 - Codec/transport matrix script (`run_transport_codec_matrix.zsh`) and soak script (`run_soak_profile.zsh`).
