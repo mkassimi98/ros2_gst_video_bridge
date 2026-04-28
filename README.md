@@ -275,12 +275,14 @@ If `fps_in` and `fps_out` are both greater than zero, the bridge is actively for
 ### Launch files
 
 - `gst_video_bridge_minimal.launch.py`:
-	- essential arguments only (`profile_machine`, `profile_stream`, `input_topic`, `sink_uri`,
-	  `codec_name`, `codec_encoder`)
+	- direct launch without a YAML file; every modern transport, codec, runtime, adaptation,
+	  debayer, and pipeline override can be changed from the command line
 - `gst_video_bridge_advanced.launch.py`:
-	- full override surface for transport/codec/runtime plus `params_file`
+	- same command-line override surface plus `params_file` for a layered YAML baseline
 - `gst_video_bridge.launch.py`:
 	- compatibility wrapper to the advanced launch
+
+See `docs/LAUNCH.md` for the complete argument list and parameter mapping.
 
 Examples:
 
@@ -288,10 +290,13 @@ Examples:
 ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
 	profile_machine:=jetson profile_stream:=low_latency \
 	input_topic:=/camera_driver_uv/vis/image_raw \
+	codec_name:=h265 codec_encoder:=nvv4l2h265enc \
+	codec_bitrate_kbps:=4000 max_fps:=30.0 \
 	sink_uri:=srt://127.0.0.1:9000?mode=listener
 
 ros2 launch ros2_gst_video_bridge gst_video_bridge_advanced.launch.py \
-	params_file:=<workspace>/src/ros2_gst_video_bridge/ros2_gst_video_bridge/config/profiles/jetson_monitoring_udp.yaml
+	params_file:=<workspace>/src/ros2_gst_video_bridge/ros2_gst_video_bridge/config/profiles/jetson_monitoring_udp.yaml \
+	runtime_mode:=validate_config print_effective_config:=true
 ```
 
 ### Curated profile files

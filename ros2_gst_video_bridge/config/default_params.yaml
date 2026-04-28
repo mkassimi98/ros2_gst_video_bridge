@@ -13,6 +13,7 @@ gst_video_bridge:
     transport.reconnect.max_attempts: 0
 
     codec.name: auto
+    codec.encoder: ""
     codec.profile: baseline
     codec.tune: zerolatency
     codec.rate_control: cbr
@@ -32,3 +33,9 @@ gst_video_bridge:
     use_wall_clock_timestamps: false
     runtime.mode: stream
     runtime.print_effective_config: true
+    runtime.stream_id: default
+    runtime.hw_fallback_failures: 3
+    runtime.adaptation.enabled: true
+    runtime.adaptation.profile: balanced
+    runtime.adaptation.interval_ms: 2000
+    runtime.adaptation.cooldown_ms: 5000

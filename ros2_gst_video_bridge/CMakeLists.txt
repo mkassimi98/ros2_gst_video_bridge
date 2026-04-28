@@ -97,6 +97,7 @@ install(DIRECTORY launch config
 )
 
 if(BUILD_TESTING)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
   find_package(ament_cmake_gtest REQUIRED)
 
   ament_add_gtest(test_config_loader test/test_config_loader.cc src/core/config_loader.cc)
@@ -150,11 +151,16 @@ if(BUILD_TESTING)
     NAME smoke_launch_compat_show_args
     COMMAND ros2 launch ros2_gst_video_bridge gst_video_bridge.launch.py --show-args)
 
+  add_test(
+    NAME check_launch_argument_surface
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/check_launch_args.py)
+
   set_tests_properties(smoke_runtime_validate_config PROPERTIES TIMEOUT 20)
   set_tests_properties(smoke_runtime_list_capabilities PROPERTIES TIMEOUT 20)
   set_tests_properties(smoke_launch_minimal_show_args PROPERTIES TIMEOUT 20)
   set_tests_properties(smoke_launch_advanced_show_args PROPERTIES TIMEOUT 20)
   set_tests_properties(smoke_launch_compat_show_args PROPERTIES TIMEOUT 20)
+  set_tests_properties(check_launch_argument_surface PROPERTIES TIMEOUT 30)
 
   if(ROS2_GST_VIDEO_BRIDGE_ENABLE_AMENT_LINT)
     find_package(ament_lint_auto REQUIRED)
