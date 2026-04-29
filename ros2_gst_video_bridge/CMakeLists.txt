@@ -1,0 +1,174 @@
+cmake_minimum_required(VERSION 3.8)
+project(ros2_gst_video_bridge)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+option(ROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_FORMAT_CHECK "Enable clang-format check target" ON)
+option(ROS2_GST_VIDEO_BRIDGE_ENABLE_AMENT_LINT "Enable ament_lint_auto checks" OFF)
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(ros2_gst_video_bridge_msgs REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0 gstreamer-app-1.0)
+
+if(ROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_FORMAT_CHECK)
+  find_program(CLANG_FORMAT_EXE NAMES clang-format clang-format-18 clang-format-17 clang-format-16 clang-format-15)
+  if(CLANG_FORMAT_EXE)
+    file(GLOB_RECURSE ROS2_GST_VIDEO_BRIDGE_FORMAT_FILES CONFIGURE_DEPENDS
+      "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
+      "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cxx"
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc"
+    )
+    if(ROS2_GST_VIDEO_BRIDGE_FORMAT_FILES)
+      add_custom_target(clang_format
+        COMMAND ${CLANG_FORMAT_EXE} -i ${ROS2_GST_VIDEO_BRIDGE_FORMAT_FILES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Running clang-format on C/C++ source files"
+        VERBATIM
+      )
+
+      add_custom_target(clang_format_check
+        COMMAND ${CLANG_FORMAT_EXE} --dry-run --Werror ${ROS2_GST_VIDEO_BRIDGE_FORMAT_FILES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Running clang-format check on C/C++ source files"
+        VERBATIM
+      )
+    else()
+      message(STATUS "clang-format found, but no matching C/C++ files were found to format.")
+    endif()
+  else()
+    message(WARNING "clang-format check requested but clang-format was not found.")
+  endif()
+endif()
+
+add_executable(gst_video_bridge_node
+  src/main.cc
+  src/gst_video_bridge_node.cc
+  src/node/core.cc
+  src/node/lifecycle.cc
+  src/node/modes.cc
+  src/node/streaming.cc
+  src/node/recovery.cc
+  src/node/fallback.cc
+  src/node/observability.cc
+  src/core/config_loader.cc
+  src/core/pipeline_builder.cc
+  src/runtime/capability_probe.cc
+  src/runtime/topic_introspector.cc
+  src/runtime/image_format.cc
+  src/runtime/stream_engine.cc
+  src/runtime/metrics_publisher.cc
+)
+
+target_include_directories(gst_video_bridge_node
+  PRIVATE
+  include
+  ${GSTREAMER_INCLUDE_DIRS}
+)
+
+target_link_libraries(gst_video_bridge_node
+  ${GSTREAMER_LIBRARIES}
+)
+
+target_compile_options(gst_video_bridge_node PRIVATE ${GSTREAMER_CFLAGS_OTHER})
+
+ament_target_dependencies(gst_video_bridge_node
+  rclcpp
+  sensor_msgs
+  std_msgs
+  ros2_gst_video_bridge_msgs
+)
+
+install(TARGETS gst_video_bridge_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY launch config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+if(BUILD_TESTING)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_config_loader test/test_config_loader.cc src/core/config_loader.cc)
+  target_include_directories(test_config_loader PRIVATE include)
+  ament_target_dependencies(test_config_loader rclcpp)
+
+  ament_add_gtest(test_pipeline_builder test/test_pipeline_builder.cc src/core/pipeline_builder.cc)
+  target_include_directories(test_pipeline_builder PRIVATE include)
+
+  ament_add_gtest(test_image_format test/test_image_format.cc src/runtime/image_format.cc)
+  target_include_directories(test_image_format PRIVATE include)
+  ament_target_dependencies(test_image_format sensor_msgs)
+
+  ament_add_gtest(test_stream_engine test/test_stream_engine.cc src/runtime/stream_engine.cc)
+  target_include_directories(test_stream_engine PRIVATE include ${GSTREAMER_INCLUDE_DIRS})
+  target_link_libraries(test_stream_engine ${GSTREAMER_LIBRARIES})
+  target_compile_options(test_stream_engine PRIVATE ${GSTREAMER_CFLAGS_OTHER})
+
+  # Internal detail/ header-only utilities: adaptation math, encoder selection, string helpers.
+  ament_add_gtest(test_detail_utils test/test_detail_utils.cc)
+  target_include_directories(test_detail_utils PRIVATE include)
+
+  # Preflight resilience policy for sink and encoder fallback decisions.
+  ament_add_gtest(test_preflight_policy test/test_preflight_policy.cc)
+  target_include_directories(test_preflight_policy PRIVATE include)
+
+  # MetricsPublisher public API: counter recording and RuntimeStatus publication.
+  ament_add_gtest(test_metrics_publisher
+    test/test_metrics_publisher.cc
+    src/runtime/metrics_publisher.cc)
+  target_include_directories(test_metrics_publisher PRIVATE include)
+  ament_target_dependencies(test_metrics_publisher rclcpp ros2_gst_video_bridge_msgs std_msgs)
+
+  add_test(
+    NAME smoke_runtime_validate_config
+    COMMAND $<TARGET_FILE:gst_video_bridge_node> --ros-args -p runtime.mode:=validate_config)
+
+  add_test(
+    NAME smoke_runtime_list_capabilities
+    COMMAND $<TARGET_FILE:gst_video_bridge_node> --ros-args -p runtime.mode:=list_capabilities)
+
+  add_test(
+    NAME smoke_launch_minimal_show_args
+    COMMAND ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py --show-args)
+
+  add_test(
+    NAME smoke_launch_advanced_show_args
+    COMMAND ros2 launch ros2_gst_video_bridge gst_video_bridge_advanced.launch.py --show-args)
+
+  add_test(
+    NAME smoke_launch_compat_show_args
+    COMMAND ros2 launch ros2_gst_video_bridge gst_video_bridge.launch.py --show-args)
+
+  add_test(
+    NAME check_launch_argument_surface
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/check_launch_args.py)
+
+  set_tests_properties(smoke_runtime_validate_config PROPERTIES TIMEOUT 20)
+  set_tests_properties(smoke_runtime_list_capabilities PROPERTIES TIMEOUT 20)
+  set_tests_properties(smoke_launch_minimal_show_args PROPERTIES TIMEOUT 20)
+  set_tests_properties(smoke_launch_advanced_show_args PROPERTIES TIMEOUT 20)
+  set_tests_properties(smoke_launch_compat_show_args PROPERTIES TIMEOUT 20)
+  set_tests_properties(check_launch_argument_surface PROPERTIES TIMEOUT 30)
+
+  if(ROS2_GST_VIDEO_BRIDGE_ENABLE_AMENT_LINT)
+    find_package(ament_lint_auto REQUIRED)
+    ament_lint_auto_find_test_dependencies()
+  endif()
+endif()
+
+ament_package()

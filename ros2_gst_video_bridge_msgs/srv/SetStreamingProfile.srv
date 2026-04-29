@@ -1,0 +1,5 @@
+string adaptation_profile
+bool reset_counters
+---
+bool success
+string message
