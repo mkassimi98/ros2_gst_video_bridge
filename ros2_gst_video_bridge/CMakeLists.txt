@@ -14,6 +14,7 @@ option(ROS2_GST_VIDEO_BRIDGE_ENABLE_AMENT_LINT "Enable ament_lint_auto checks" O
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(ros2_gst_video_bridge_msgs REQUIRED)
@@ -53,8 +54,9 @@ if(ROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_FORMAT_CHECK)
   endif()
 endif()
 
-add_executable(gst_video_bridge_node
-  src/main.cc
+set(GST_VIDEO_BRIDGE_COMPONENT_EXEC gst_video_bridge_component_runner)
+
+set(GST_VIDEO_BRIDGE_NODE_SOURCES
   src/gst_video_bridge_node.cc
   src/node/core.cc
   src/node/lifecycle.cc
@@ -72,27 +74,60 @@ add_executable(gst_video_bridge_node
   src/runtime/metrics_publisher.cc
 )
 
-target_include_directories(gst_video_bridge_node
-  PRIVATE
-  include
+add_library(gst_video_bridge_component SHARED ${GST_VIDEO_BRIDGE_NODE_SOURCES})
+
+target_include_directories(gst_video_bridge_component
+  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
   ${GSTREAMER_INCLUDE_DIRS}
 )
 
-target_link_libraries(gst_video_bridge_node
+target_link_libraries(gst_video_bridge_component
   ${GSTREAMER_LIBRARIES}
 )
 
-target_compile_options(gst_video_bridge_node PRIVATE ${GSTREAMER_CFLAGS_OTHER})
+target_compile_options(gst_video_bridge_component PRIVATE ${GSTREAMER_CFLAGS_OTHER})
 
-ament_target_dependencies(gst_video_bridge_node
+ament_target_dependencies(gst_video_bridge_component
   rclcpp
+  rclcpp_components
   sensor_msgs
   std_msgs
   ros2_gst_video_bridge_msgs
 )
 
-install(TARGETS gst_video_bridge_node
+rclcpp_components_register_node(gst_video_bridge_component
+  PLUGIN "ros2_gst_video_bridge::GstVideoBridgeNode"
+  EXECUTABLE ${GST_VIDEO_BRIDGE_COMPONENT_EXEC}
+)
+
+add_executable(gst_video_bridge_node src/main.cc)
+target_link_libraries(gst_video_bridge_node
+  gst_video_bridge_component
+)
+ament_target_dependencies(gst_video_bridge_node
+  rclcpp
+)
+set_target_properties(gst_video_bridge_node PROPERTIES
+  INSTALL_RPATH "$ORIGIN/.."
+)
+set_target_properties(${GST_VIDEO_BRIDGE_COMPONENT_EXEC} PROPERTIES
+  INSTALL_RPATH "$ORIGIN/.."
+)
+
+install(TARGETS gst_video_bridge_component
+  DESTINATION lib
+)
+
+install(TARGETS
+  gst_video_bridge_node
+  ${GST_VIDEO_BRIDGE_COMPONENT_EXEC}
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY include/
+  DESTINATION include/
 )
 
 install(DIRECTORY launch config
@@ -170,5 +205,13 @@ if(BUILD_TESTING)
     ament_lint_auto_find_test_dependencies()
   endif()
 endif()
+
+ament_export_dependencies(
+  rclcpp
+  rclcpp_components
+  sensor_msgs
+  std_msgs
+  ros2_gst_video_bridge_msgs
+)
 
 ament_package()
