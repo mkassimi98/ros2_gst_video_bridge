@@ -19,7 +19,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(ros2_gst_video_bridge_msgs REQUIRED)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0 gstreamer-app-1.0)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
 
 if(ROS2_GST_VIDEO_BRIDGE_ENABLE_CLANG_FORMAT_CHECK)
   find_program(CLANG_FORMAT_EXE NAMES clang-format clang-format-18 clang-format-17 clang-format-16 clang-format-15)
@@ -153,6 +153,12 @@ if(BUILD_TESTING)
   target_include_directories(test_stream_engine PRIVATE include ${GSTREAMER_INCLUDE_DIRS})
   target_link_libraries(test_stream_engine ${GSTREAMER_LIBRARIES})
   target_compile_options(test_stream_engine PRIVATE ${GSTREAMER_CFLAGS_OTHER})
+  ament_target_dependencies(test_stream_engine sensor_msgs)
+
+  ament_add_gtest(test_zero_copy_node test/test_zero_copy_node.cc)
+  target_include_directories(test_zero_copy_node PRIVATE include ${GSTREAMER_INCLUDE_DIRS})
+  target_link_libraries(test_zero_copy_node gst_video_bridge_component ${GSTREAMER_LIBRARIES})
+  ament_target_dependencies(test_zero_copy_node rclcpp sensor_msgs ros2_gst_video_bridge_msgs)
 
   # Internal detail/ header-only utilities: adaptation math, encoder selection, string helpers.
   ament_add_gtest(test_detail_utils test/test_detail_utils.cc)

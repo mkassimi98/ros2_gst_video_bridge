@@ -1,9 +1,9 @@
-#include "ros2_gst_video_bridge/core/config_loader.hpp"
-
 #include <gtest/gtest.h>
-#include <rclcpp/rclcpp.hpp>
 
+#include <rclcpp/rclcpp.hpp>
 #include <vector>
+
+#include "ros2_gst_video_bridge/core/config_loader.hpp"
 
 namespace {
 
@@ -38,6 +38,17 @@ TEST_F(ConfigLoaderTest, AppliesJetsonLowLatencyProfileDefaults) {
   EXPECT_EQ(cfg.codec.name, "auto");
   EXPECT_EQ(cfg.codec.tune, "zerolatency");
   EXPECT_GT(cfg.codec.bitrate_kbps, 0);
+  EXPECT_FALSE(cfg.source.zero_copy);
+}
+
+TEST_F(ConfigLoaderTest, LoadsZeroCopyOption) {
+  rclcpp::NodeOptions options;
+  options.parameter_overrides({rclcpp::Parameter("source.zero_copy", true)});
+  auto node = std::make_shared<rclcpp::Node>("config_loader_zero_copy_test", options);
+  const auto cfg = ros2_gst_video_bridge::ConfigLoader::loadFromNode(*node);
+  EXPECT_TRUE(cfg.source.zero_copy);
+  EXPECT_NE(ros2_gst_video_bridge::ConfigLoader::toDebugString(cfg).find("source.zero_copy=true"),
+            std::string::npos);
 }
 
 TEST_F(ConfigLoaderTest, ValidateRejectsInvalidMode) {

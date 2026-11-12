@@ -57,6 +57,7 @@ ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
 | `profile_machine` | `profile.machine` | string | `generic` |
 | `profile_stream` | `profile.stream` | string | `low_latency` |
 | `input_topic` | `input_topic` | string | `/camera/image_raw` |
+| `zero_copy` | `source.zero_copy` | bool | `false` |
 | `transport_kind` | `transport.kind` | string | `srt` |
 | `sink_uri` | `transport.sink_uri` | string | `srt://127.0.0.1:9000?mode=listener` |
 | `transport_latency_ms` | `transport.latency_ms` | int | `60` |
@@ -93,6 +94,12 @@ ros2 launch ros2_gst_video_bridge gst_video_bridge_minimal.launch.py \
 | `params_file` | path | installed `default_params.yaml` | Advanced/wrapper launch only |
 
 ## Notes
+
+- `zero_copy:=true` uses `Image::UniquePtr` and wraps its pixel memory for `appsrc`.
+  These launches run separate processes. To also avoid the ROS transport copy,
+  load the producer and bridge into the same component container with
+  `use_intra_process_comms: true` on both, and publish images with `std::move`.
+  See the README for the component configuration and pipeline limitations.
 
 - Boolean arguments accept normal ROS launch values such as `true` and `false`.
 - Integer and floating-point arguments are passed as typed ROS parameters, not loose strings.

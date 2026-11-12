@@ -1,7 +1,8 @@
-#include "ros2_gst_video_bridge/runtime/image_format.hpp"
-
 #include <gtest/gtest.h>
+
 #include <sensor_msgs/image_encodings.hpp>
+
+#include "ros2_gst_video_bridge/runtime/image_format.hpp"
 
 namespace {
 
@@ -62,18 +63,16 @@ TEST(ImageFormatTest, ResolvesBayerAsGrayFallback) {
 }
 
 TEST(ImageFormatTest, ResolvesGstBayerPatternFor8BitEncodings) {
-  EXPECT_EQ(ros2_gst_video_bridge::resolveGstBayerFormat(
-                sensor_msgs::image_encodings::BAYER_RGGB8),
+  EXPECT_EQ(ros2_gst_video_bridge::resolveGstBayerFormat(sensor_msgs::image_encodings::BAYER_RGGB8),
             "rggb");
-  EXPECT_EQ(ros2_gst_video_bridge::resolveGstBayerFormat(
-                sensor_msgs::image_encodings::BAYER_BGGR8),
+  EXPECT_EQ(ros2_gst_video_bridge::resolveGstBayerFormat(sensor_msgs::image_encodings::BAYER_BGGR8),
             "bggr");
 }
 
 TEST(ImageFormatTest, DoesNotResolveGstBayerPatternFor16BitEncodings) {
-  EXPECT_TRUE(ros2_gst_video_bridge::resolveGstBayerFormat(
-                  sensor_msgs::image_encodings::BAYER_RGGB16)
-                  .empty());
+  EXPECT_TRUE(
+      ros2_gst_video_bridge::resolveGstBayerFormat(sensor_msgs::image_encodings::BAYER_RGGB16)
+          .empty());
 }
 
 } // namespace

@@ -10,10 +10,9 @@
 
 namespace ros2_gst_video_bridge {
 
-class PipelineBuilder
-{
-  public:
-    static std::string build(const GstBridgeConfig& config);
+class PipelineBuilder {
+public:
+  static std::string build(const GstBridgeConfig &config);
 };
 
 } // namespace ros2_gst_video_bridge

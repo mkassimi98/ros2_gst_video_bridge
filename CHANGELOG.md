@@ -10,6 +10,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Opt-in `source.zero_copy` (`zero_copy` launch argument): receive `Image::UniquePtr`
+  and wrap its read-only storage for `appsrc`, retaining image ownership until
+  GStreamer frees the memory. Raw video preserves row stride with `GstVideoMeta`.
+  Intra-process producer-to-appsrc zero-copy requires both components in the same
+  process, intra-process communication enabled, and compatible ownership topology.
+
 **Node architecture**
 - Modular node split: `src/node/` with one file per responsibility (`core`, `lifecycle`, `modes`, `streaming`, `recovery`, `fallback`, `observability`). Each file stays under 300 lines.
 - Separate `src/core/` (config loading and pipeline building) and `src/runtime/` (capability probe, stream engine, metrics, image format, topic introspector) layers.

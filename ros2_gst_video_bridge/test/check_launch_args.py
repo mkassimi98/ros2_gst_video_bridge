@@ -8,6 +8,7 @@ COMMON_ARGUMENTS = {
     'profile_machine',
     'profile_stream',
     'input_topic',
+    'zero_copy',
     'enable_debayer',
     'debayer_output_topic',
     'transport_kind',

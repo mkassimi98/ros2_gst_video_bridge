@@ -1,14 +1,14 @@
 // Tests for MetricsPublisher: verifies that counter recording methods work
 // correctly and that the published RuntimeStatus reflects the recorded values.
 
-#include "ros2_gst_video_bridge/runtime/metrics_publisher.hpp"
-
 #include <gtest/gtest.h>
-#include <rclcpp/rclcpp.hpp>
-#include <ros2_gst_video_bridge_msgs/msg/runtime_status.hpp>
 
 #include <chrono>
 #include <memory>
+#include <rclcpp/rclcpp.hpp>
+#include <ros2_gst_video_bridge_msgs/msg/runtime_status.hpp>
+
+#include "ros2_gst_video_bridge/runtime/metrics_publisher.hpp"
 
 namespace {
 

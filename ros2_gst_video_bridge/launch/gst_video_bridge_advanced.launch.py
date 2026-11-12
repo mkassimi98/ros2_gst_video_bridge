@@ -39,6 +39,7 @@ COMMON_ARGUMENTS = (
         'Stream profile: default|low_latency|low_bandwidth|high_quality|monitoring_udp',
     ),
     ('input_topic', '/camera/image_raw', 'ROS image input topic'),
+    ('zero_copy', 'false', 'Receive UniquePtr images and wrap their memory for appsrc (true|false)'),
     ('enable_debayer', 'false', 'Enable image_proc debayer node before bridge (true|false)'),
     (
         'debayer_output_topic',
@@ -157,6 +158,7 @@ def generate_launch_description():
                     'profile.machine': _lc('profile_machine'),
                     'profile.stream': _lc('profile_stream'),
                     'input_topic': bridge_input_topic,
+                    'source.zero_copy': _bool_param('zero_copy'),
                     'transport.kind': _lc('transport_kind'),
                     'transport.sink_uri': _lc('sink_uri'),
                     'transport.latency_ms': _int_param('transport_latency_ms'),

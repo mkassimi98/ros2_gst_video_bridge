@@ -180,6 +180,41 @@ All parameters are declared at node startup. Modern namespaced names take preced
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `input_topic` | string | `/camera/image_raw` | ROS 2 image topic (`sensor_msgs/msg/Image`) |
+| `source.zero_copy` | bool | `false` | Receive `Image::UniquePtr` and wrap its read-only pixel memory for GStreamer `appsrc` |
+
+For composition with no pixel copy between the producer and `appsrc`, set
+`source.zero_copy: true` on the bridge and enable `use_intra_process_comms` on
+both components in the same container:
+
+```python
+ComposableNode(
+    package='ros2_gst_video_bridge',
+    plugin='ros2_gst_video_bridge::GstVideoBridgeNode',
+    name='gst_video_bridge',
+    parameters=[{'input_topic': '/camera/image_raw', 'source.zero_copy': True}],
+    extra_arguments=[{'use_intra_process_comms': True}],
+)
+```
+
+The producer must publish ownership with `publisher->publish(std::move(image))`.
+With one ownership-taking subscriber, ROS can transfer the original message;
+multiple ownership-taking subscribers or mixed shared/unique consumers can cause
+ROS copies. A shared read-only subscription can also avoid ROS pixel copies;
+`UniquePtr` alone does not guarantee zero-copy for every graph.
+See the [ROS intra-process design](https://design.ros2.org/articles/intraprocess_communications.html).
+
+The bridge keeps the image alive until GStreamer releases the wrapped memory,
+including on drops, reconnection and shutdown. Raw video carries its ROS row
+stride as `GstVideoMeta`; Bayer caps require tightly packed rows. The default
+copying path remains available with `source.zero_copy: false`.
+Standalone launches expose `zero_copy:=true` to skip the ROS-to-`appsrc` copy,
+but they do not place the producer and bridge in the same process.
+
+This covers the producer's published ROS image through `appsrc`, not camera
+capture, debayering, colour conversion, encoding, or GPU/NVMM uploads. Those
+stages can allocate or copy buffers. GStreamer plugins that write into wrapped
+read-only memory must obtain writable memory, potentially causing a copy.
+See [GStreamer buffer ownership](https://gstreamer.freedesktop.org/documentation/gstreamer/gstbuffer.html).
 
 ### Transport
 

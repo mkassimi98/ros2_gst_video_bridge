@@ -4,6 +4,7 @@ gst_video_bridge:
     profile.stream: low_latency
 
     input_topic: /camera_driver_uv/vis/image_raw
+    source.zero_copy: false
 
     transport.kind: srt
     transport.sink_uri: srt://127.0.0.1:9000?mode=listener
