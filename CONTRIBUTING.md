@@ -33,11 +33,12 @@ colcon test --packages-select ros2_gst_video_bridge
 colcon test-result --all --verbose
 ```
 
-All 11 CTest entries must pass before opening a PR. If you add functionality, add a test for it.
+All registered CTest entries must pass before opening a PR. If you add functionality, add a test for it.
 
 ## Code Style
 
-This repository uses `clang-format-15` (LLVM base, 100-column limit, 2-space indent).
+This repository uses `clang-format-15` with the committed `.clang-format`
+(LLVM base, 100-column limit, 2-space indent).
 
 **Format check before every commit:**
 
@@ -105,7 +106,7 @@ test(detail): add adaptation scaling and SW encoder selection coverage
 Before requesting review, confirm:
 
 - [ ] `colcon build` succeeds without warnings on a clean build.
-- [ ] All 11 CTest entries pass (`colcon test-result --all`).
+- [ ] All registered CTest entries pass (`colcon test-result --all`).
 - [ ] `clang-format-15 --dry-run --Werror` exits 0 on all modified files.
 - [ ] New functionality has at least one test.
 - [ ] README parameter table updated if new parameters were added.

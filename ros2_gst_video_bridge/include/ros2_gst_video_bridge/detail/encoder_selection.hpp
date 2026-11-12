@@ -22,24 +22,23 @@ namespace detail {
 // "x264enc") or an empty string when none is found.
 //
 // Each entry is expected to have the form: "codec_name -> element_name [tag]"
-inline std::string selectSoftwareEncoderForCodec(
-        const std::string&              codec_name,
-        const std::vector<std::string>& encoder_implementations)
-{
-    const std::string prefix = codec_name + " -> ";
-    for (const auto& impl : encoder_implementations) {
-        if (!startsWith(impl, prefix)) {
-            continue;
-        }
-        if (impl.find("[sw]") == std::string::npos) {
-            continue;
-        }
-        const std::string encoder = extractElementName(impl);
-        if (!encoder.empty()) {
-            return encoder;
-        }
+inline std::string
+selectSoftwareEncoderForCodec(const std::string &codec_name,
+                              const std::vector<std::string> &encoder_implementations) {
+  const std::string prefix = codec_name + " -> ";
+  for (const auto &impl : encoder_implementations) {
+    if (!startsWith(impl, prefix)) {
+      continue;
     }
-    return "";
+    if (impl.find("[sw]") == std::string::npos) {
+      continue;
+    }
+    const std::string encoder = extractElementName(impl);
+    if (!encoder.empty()) {
+      return encoder;
+    }
+  }
+  return "";
 }
 
 } // namespace detail

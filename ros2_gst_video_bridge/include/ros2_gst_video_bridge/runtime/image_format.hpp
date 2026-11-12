@@ -10,17 +10,16 @@
 
 namespace ros2_gst_video_bridge {
 
-struct ImageShapeValidation
-{
-    bool        valid{false};
-    std::string error;
+struct ImageShapeValidation {
+  bool valid{false};
+  std::string error;
 };
 
-bool                 resolveGstFormat(const std::string& encoding, std::string& gst_format);
-std::string          resolveGstBayerFormat(const std::string& encoding);
-bool                 isBayerEncoding(const std::string& encoding);
-size_t               bytesPerPixelForEncoding(const std::string& encoding);
-ImageShapeValidation validateImageShape(const sensor_msgs::msg::Image& msg);
+bool resolveGstFormat(const std::string &encoding, std::string &gst_format);
+std::string resolveGstBayerFormat(const std::string &encoding);
+bool isBayerEncoding(const std::string &encoding);
+size_t bytesPerPixelForEncoding(const std::string &encoding);
+ImageShapeValidation validateImageShape(const sensor_msgs::msg::Image &msg);
 
 } // namespace ros2_gst_video_bridge
 

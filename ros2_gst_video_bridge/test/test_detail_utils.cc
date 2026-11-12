@@ -1,11 +1,11 @@
 // Tests for the internal detail/ utility headers.
 // These are pure header-only functions with no dependencies beyond the STL.
 
+#include <gtest/gtest.h>
+
 #include "ros2_gst_video_bridge/detail/adaptation.hpp"
 #include "ros2_gst_video_bridge/detail/encoder_selection.hpp"
 #include "ros2_gst_video_bridge/detail/string_utils.hpp"
-
-#include <gtest/gtest.h>
 
 namespace {
 
@@ -89,7 +89,7 @@ TEST(EncoderSelectionTest, FindsFirstSwMatchWhenMultiplePresent) {
 // ─── adaptation ──────────────────────────────────────────────────────────────
 
 TEST(AdaptationTest, LevelZeroIsAlwaysNoChange) {
-  for (const auto* profile : {"conservative", "balanced", "aggressive", "unknown"}) {
+  for (const auto *profile : {"conservative", "balanced", "aggressive", "unknown"}) {
     const auto scales = ros2_gst_video_bridge::detail::computeAdaptationScales(profile, 0);
     EXPECT_DOUBLE_EQ(scales.fps_scale, 1.0) << "profile=" << profile;
     EXPECT_DOUBLE_EQ(scales.bitrate_scale, 1.0) << "profile=" << profile;

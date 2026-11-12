@@ -1,6 +1,6 @@
-#include "ros2_gst_video_bridge/detail/preflight_policy.hpp"
-
 #include <gtest/gtest.h>
+
+#include "ros2_gst_video_bridge/detail/preflight_policy.hpp"
 
 namespace {
 

@@ -1,6 +1,6 @@
-#include "ros2_gst_video_bridge/core/pipeline_builder.hpp"
-
 #include <gtest/gtest.h>
+
+#include "ros2_gst_video_bridge/core/pipeline_builder.hpp"
 
 namespace {
 
