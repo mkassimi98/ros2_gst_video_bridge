@@ -53,6 +53,8 @@ GstBridgeConfig ConfigLoader::loadFromNode(rclcpp::Node &node) {
 
   config.source.input_topic =
       node.declare_parameter<std::string>("input_topic", config.source.input_topic);
+  config.source.zero_copy =
+      node.declare_parameter<bool>("source.zero_copy", config.source.zero_copy);
 
   config.transport.kind =
       node.declare_parameter<std::string>("gst.transport", config.transport.kind);
@@ -269,6 +271,7 @@ std::string ConfigLoader::toDebugString(const GstBridgeConfig &config) {
   out << "profile.machine=" << config.profile.machine << '\n';
   out << "profile.stream=" << config.profile.stream << '\n';
   out << "input_topic=" << config.source.input_topic << '\n';
+  out << "source.zero_copy=" << (config.source.zero_copy ? "true" : "false") << '\n';
   out << "transport.kind=" << config.transport.kind << '\n';
   out << "transport.sink_uri=" << config.transport.sink_uri << '\n';
   out << "transport.latency_ms=" << config.transport.latency_ms << '\n';

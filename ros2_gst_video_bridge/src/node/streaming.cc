@@ -5,6 +5,8 @@
 #include <chrono>
 #include <cmath>
 #include <sstream>
+#include <type_traits>
+#include <utility>
 
 #include "ros2_gst_video_bridge/core/pipeline_builder.hpp"
 #include "ros2_gst_video_bridge/gst_video_bridge_node.hpp"
@@ -88,9 +90,24 @@ void GstVideoBridgeNode::initializeSubscriptions() {
     return;
   }
 
+  if (config_.source.zero_copy) {
+    image_subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
+        config_.source.input_topic, rclcpp::SensorDataQoS(),
+        [this](sensor_msgs::msg::Image::UniquePtr msg) { onImage(std::move(msg)); });
+    RCLCPP_INFO(this->get_logger(),
+                "source.zero_copy: UniquePtr input with read-only memory wrapped for appsrc.");
+    if (!this->get_node_options().use_intra_process_comms()) {
+      RCLCPP_WARN(this->get_logger(), "Intra-process communication is disabled; source.zero_copy "
+                                      "only avoids the appsrc input copy. "
+                                      "For ROS zero-copy, enable use_intra_process_comms on "
+                                      "producer and bridge in the same process.");
+    }
+    return;
+  }
+
   image_subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
       config_.source.input_topic, rclcpp::SensorDataQoS(),
-      std::bind(&GstVideoBridgeNode::onImage, this, std::placeholders::_1));
+      [this](sensor_msgs::msg::Image::SharedPtr msg) { onImage(std::move(msg)); });
 }
 
 void GstVideoBridgeNode::initializeHealthMonitoring() {
@@ -102,7 +119,7 @@ void GstVideoBridgeNode::initializeHealthMonitoring() {
                                           std::bind(&GstVideoBridgeNode::runHealthCheck, this));
 }
 
-void GstVideoBridgeNode::onImage(const sensor_msgs::msg::Image::SharedPtr msg) {
+template <typename MessagePtr> void GstVideoBridgeNode::onImage(MessagePtr msg) {
   if (!stream_engine_ || !stream_engine_->isRunning() || pipeline_reconfigure_requested_) {
     return;
   }
@@ -192,9 +209,14 @@ void GstVideoBridgeNode::onImage(const sensor_msgs::msg::Image::SharedPtr msg) {
   }
 
   const auto push_begin = std::chrono::steady_clock::now();
-  const bool pushed =
-      stream_engine_->pushFrame(msg->data.data(), msg->data.size(), static_cast<int>(msg->width),
-                                static_cast<int>(msg->height), gst_format, timestamp_ns);
+  bool pushed;
+  if constexpr (std::is_same_v<MessagePtr, sensor_msgs::msg::Image::UniquePtr>) {
+    pushed = stream_engine_->pushFrame(std::move(msg), gst_format, timestamp_ns);
+  } else {
+    pushed =
+        stream_engine_->pushFrame(msg->data.data(), msg->data.size(), static_cast<int>(msg->width),
+                                  static_cast<int>(msg->height), gst_format, timestamp_ns);
+  }
   const auto push_end = std::chrono::steady_clock::now();
   const double push_latency_ms =
       std::chrono::duration<double, std::milli>(push_end - push_begin).count();

@@ -15,6 +15,7 @@ struct ProfileConfig {
 
 struct SourceConfig {
   std::string input_topic{"/camera/image_raw"};
+  bool zero_copy{false};
   bool auto_debayer{true};
   std::string detected_bayer_format;
 };

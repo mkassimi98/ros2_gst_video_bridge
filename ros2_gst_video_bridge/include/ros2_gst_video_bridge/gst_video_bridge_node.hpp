@@ -40,7 +40,7 @@ private:
   void initializeModules();
   void initializeSubscriptions();
   void initializeHealthMonitoring();
-  void onImage(const sensor_msgs::msg::Image::SharedPtr msg);
+  template <typename MessagePtr> void onImage(MessagePtr msg);
   void runHealthCheck();
   void evaluateAdaptationPolicy();
   void applyAdaptationLevel(uint8_t level, const std::string &reason);

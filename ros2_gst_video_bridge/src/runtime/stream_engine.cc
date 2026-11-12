@@ -7,7 +7,10 @@
 
 #include <chrono>
 #include <cstring>
+#include <limits>
 #include <sstream>
+
+#include "ros2_gst_video_bridge/detail/image_buffer.hpp"
 
 namespace ros2_gst_video_bridge {
 
@@ -134,6 +137,29 @@ const std::string &StreamEngine::pipeline() const { return pipeline_; }
 
 bool StreamEngine::pushFrame(const uint8_t *data, size_t size, int width, int height,
                              const std::string &gst_format, uint64_t timestamp_ns) {
+  return pushFrameImpl(data, size, width, height, gst_format, timestamp_ns, nullptr);
+}
+
+bool StreamEngine::pushFrame(sensor_msgs::msg::Image::UniquePtr image,
+                             const std::string &gst_format, uint64_t timestamp_ns) {
+  if (!image) {
+    return false;
+  }
+  const auto *data = image->data.data();
+  const auto size = image->data.size();
+  const auto width = image->width;
+  const auto height = image->height;
+  if (width > static_cast<uint32_t>(std::numeric_limits<int>::max()) ||
+      height > static_cast<uint32_t>(std::numeric_limits<int>::max())) {
+    return false;
+  }
+  return pushFrameImpl(data, size, static_cast<int>(width), static_cast<int>(height), gst_format,
+                       timestamp_ns, std::move(image));
+}
+
+bool StreamEngine::pushFrameImpl(const uint8_t *data, size_t size, int width, int height,
+                                 const std::string &gst_format, uint64_t timestamp_ns,
+                                 sensor_msgs::msg::Image::UniquePtr image) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   if (!running_.load() || appsrc_ == nullptr || pipeline_element_ == nullptr || data == nullptr ||
@@ -150,21 +176,26 @@ bool StreamEngine::pushFrame(const uint8_t *data, size_t size, int width, int he
     return false;
   }
 
-  GstBuffer *buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
+  const bool wrapped = static_cast<bool>(image);
+  GstBuffer *buffer = wrapped ? detail::wrapImageBuffer(std::move(image), gst_format)
+                              : gst_buffer_new_allocate(nullptr, size, nullptr);
   if (buffer == nullptr) {
-    last_error_ = "Failed to allocate GstBuffer.";
+    last_error_ = "Failed to create GstBuffer for image.";
     return false;
   }
 
-  GstMapInfo map_info;
-  if (!gst_buffer_map(buffer, &map_info, GST_MAP_WRITE)) {
-    last_error_ = "Failed to map GstBuffer for writing.";
-    gst_buffer_unref(buffer);
-    return false;
-  }
+  // Wrapped memory already contains the pixels and is deliberately read-only.
+  if (!wrapped) {
+    GstMapInfo map_info;
+    if (!gst_buffer_map(buffer, &map_info, GST_MAP_WRITE)) {
+      last_error_ = "Failed to map GstBuffer for writing.";
+      gst_buffer_unref(buffer);
+      return false;
+    }
 
-  std::memcpy(map_info.data, data, size);
-  gst_buffer_unmap(buffer, &map_info);
+    std::memcpy(map_info.data, data, size);
+    gst_buffer_unmap(buffer, &map_info);
+  }
 
   GST_BUFFER_PTS(buffer) = static_cast<GstClockTime>(normalizeBufferPts(timestamp_ns));
   GST_BUFFER_DTS(buffer) = GST_CLOCK_TIME_NONE;

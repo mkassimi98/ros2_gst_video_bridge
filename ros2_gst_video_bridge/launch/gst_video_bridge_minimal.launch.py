@@ -56,6 +56,11 @@ def generate_launch_description():
             description='Enable image_proc debayer node before bridge (true|false)',
         ),
         DeclareLaunchArgument(
+            'zero_copy',
+            default_value='false',
+            description='Receive UniquePtr images and wrap their memory for appsrc (true|false)',
+        ),
+        DeclareLaunchArgument(
             'debayer_output_topic',
             default_value='/camera/image_color',
             description='Debayered image topic used by the bridge when enable_debayer=true',
@@ -213,6 +218,7 @@ def generate_launch_description():
                 'profile.machine': _lc('profile_machine'),
                 'profile.stream': _lc('profile_stream'),
                 'input_topic': bridge_input_topic,
+                'source.zero_copy': _bool_param('zero_copy'),
                 'transport.kind': _lc('transport_kind'),
                 'transport.sink_uri': _lc('sink_uri'),
                 'transport.latency_ms': _int_param('transport_latency_ms'),

@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <sensor_msgs/msg/image.hpp>
 #include <stop_token>
 #include <string>
 #include <thread>
@@ -28,9 +29,15 @@ public:
   const std::string &pipeline() const;
   bool pushFrame(const uint8_t *data, size_t size, int width, int height,
                  const std::string &gst_format, uint64_t timestamp_ns);
+  // Transfers ownership of the image to GStreamer without copying its pixel storage.
+  bool pushFrame(sensor_msgs::msg::Image::UniquePtr image, const std::string &gst_format,
+                 uint64_t timestamp_ns);
   std::string lastError() const;
 
 private:
+  bool pushFrameImpl(const uint8_t *data, size_t size, int width, int height,
+                     const std::string &gst_format, uint64_t timestamp_ns,
+                     sensor_msgs::msg::Image::UniquePtr image);
   bool setAppSrcCaps(int width, int height, const std::string &gst_format);
   uint64_t normalizeBufferPts(uint64_t source_timestamp_ns);
   bool isAppSrcQueueFull();
